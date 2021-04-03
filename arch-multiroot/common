@@ -1,0 +1,205 @@
+ESPS=()
+
+BOOTS=()
+BOOT_BACKINGS=()
+
+DETACHED_LUKS=()
+DETACHED_LUKS_BACKINGS=()
+
+HEADER_TMPDIR="$(mktemp -d)"
+MULTIENCRYPT_DELIMITER="@"
+
+: "${CRYPTO_HASH:=sha512}"
+: "${CRYPTO_CIPHER:=aes-xts-plain64}"
+: "${CRYPTO_KEYSIZE:=512}"
+: "${CRYPTO_OFFSET:=0}"
+: "${CRYPTO_SKIP:=}"
+
+BOOTDEVS="DEVICES[@]" ROOTPART="-part4"
+[ "${#BOOT_DEVICES[@]}" -gt 0 ] && BOOTDEVS="BOOT_DEVICES[@]" && ROOTPART="" ||:
+
+string_join(){ local IFS="$1"; shift; echo "$*"; }
+
+wait_for_device(){ until [ -L "${1}" ]; do sleep 3; done; }
+
+find_dm_backing_device(){
+  local i dev
+  for i in $(find /sys/dev/ -name $(dmsetup table ${1} | awk '{print $7}')); do
+    # find /dev/disk/* symlinks?
+    dev="$(cat ${i}/uevent | awk -F= '/^DEVNAME=/ {print $NF}')"
+  done
+}
+
+add_esp(){
+  wait_for_device "${1}"
+  mkfs.msdos -F 32 "${1}"
+  ESPS+=("${1}")
+}
+
+add_luks_boot(){
+  wait_for_device "${1}"
+  local dm_name="$(uuidgen)"
+  cryptsetup -h "${CRYPTO_HASH}" -c "${CRYPTO_CIPHER}" -s "${CRYPTO_KEYSIZE}" --type luks1 -y luksFormat "${1}"
+  cryptsetup luksOpen "${1}" "${dm_name}"
+  mkfs.ext4 -m 0 -i 4096 -b 4096 -E lazy_itable_init=0,lazy_journal_init=0 "/dev/mapper/${dm_name}"
+  BOOT_BACKINGS+=("${1}")
+  BOOTS+=("${dm_name}")
+}
+
+add_detached_luks(){
+  wait_for_device "${1}"
+  local dm_name="$(uuidgen)"
+  local tmp_header="${HEADER_TMPDIR}/${dm_name}"
+  dd if=/dev/urandom of="${tmp_header}" bs=16M count=1
+  cryptsetup -h "${CRYPTO_HASH}" -c "${CRYPTO_CIPHER}" -s "${CRYPTO_KEYSIZE}" --type luks1 -y luksFormat --header "${tmp_header}" "${1}"
+  cryptsetup luksOpen --header "${tmp_header}" "${1}" "${dm_name}"
+  DETACHED_LUKS_BACKINGS+=("${1}")
+  DETACHED_LUKS+=("${dm_name}")
+}
+
+install_pkgbuild(){
+  local mountpoint="${1}"
+  shift
+  arch-chroot "${mountpoint}" /bin/bash -ex <<EOF
+export PKGBUILD_SUDOERS="/etc/sudoers.d/pkgbuild" PKGBUILD_TMPDIR="\$(mktemp -d)" PKGBUILD_USER="daemon"
+echo "\${PKGBUILD_USER} ALL=(ALL) NOPASSWD: ALL" >"\${PKGBUILD_SUDOERS}"
+chown "\${PKGBUILD_USER}":"\${PKGBUILD_USER}" "\${PKGBUILD_TMPDIR}"
+su -ps /bin/bash daemon <<'EOD'
+set -ex
+cd /tmp
+for i in ${@}; do
+  BUILD_DIR="\$(mktemp -d)"
+  git clone https://github.com/zer0def/PKGBUILDs -b \${i} "\${BUILD_DIR}"
+  pushd "\${BUILD_DIR}"
+  makepkg --noconfirm -Crsf
+  mv *.pkg.tar* "\${PKGBUILD_TMPDIR}"
+  popd
+  rm -rf "\${BUILD_DIR}"
+done
+EOD
+pacman --noconfirm -U "\${PKGBUILD_TMPDIR}"/*.pkg.tar*
+rm -rf "\${PKGBUILD_TMPDIR}" "\${PKGBUILD_SUDOERS}"
+EOF
+}
+
+bootstrap_arch(){
+  local i
+  mkdir -p "${1}/boot"
+  mount "/dev/mapper/${BOOTS[0]}" "${1}/boot"
+
+  mkdir -p "${1}/boot/efi"
+  mount "${ESPS[0]}" "${1}/boot/efi"
+
+  # networkmanager network-manager-applet ufw \
+  # pulseaudio-{alsa,bluetooth,jack} pavucontrol jack2{,-dbus} \
+  # screen gvim htop iotop iftop strace rsync mtr lshw lsof ntfs-3g sudo \
+  # mpv streamlink youtube-dl mesa-vdpau libva-{intel,mesa,vdpau}-driver intel-media-driver intel-media-sdk \
+  # lxqt xorg xorg-drivers opencl-mesa vulkan-{intel,radeon,mesa-layers,swrast} python-py{opencl,cuda}
+  pacstrap -c "${1}" base \
+    base-devel git ccache distcc sudo \
+    linux{,-{hardened,lts,zen}}{,-headers} usbctl \
+    linux-firmware crda mdadm \
+    grub efibootmgr {intel,amd}-ucode \
+    libfido2 oath-toolkit pam-u2f yubikey-full-disk-encryption \
+    haveged syslog-ng cronie ntp systemd-swap
+  install_pkgbuild "${1}" khefin mkinitcpio-multiencrypt
+
+  # hostname
+  echo 'duckduckgoose' > "${1}/etc/hostname"
+
+  # timezone
+  pushd "${1}/etc"
+  ln -sf ../usr/share/zoneinfo/Europe/Warsaw localtime
+  popd
+
+  # common GRUB config
+  cat <<EOF >>"${1}/etc/default/grub"
+GRUB_ENABLE_CRYPTODISK=y
+GRUB_DEFAULT='Advanced options for Arch Linux>Arch Linux, with Linux linux-hardened'
+GRUB_CMDLINE_LINUX_DEFAULT+=' multiencrypt_delimiter=${MULTIENCRYPT_DELIMITER} cryptdevices=$(string_join "${MULTIENCRYPT_DELIMITER}" $(for j in $(seq 0 $((${#BOOTS[@]}-1))); do echo "${BOOT_BACKINGS[${j}]}:${BOOTS[${j}]}"; done))${MULTIENCRYPT_DELIMITER}$(string_join "${MULTIENCRYPT_DELIMITER}" $(for j in $(seq 0 $((${#DETACHED_LUKS[@]}-1))); do echo "${DETACHED_LUKS_BACKINGS[${j}]}:${DETACHED_LUKS[${j}]}"; done)) cryptheaders=$(for j in $(seq 0 $((${#BOOTS[@]}-1))); do echo -n "${MULTIENCRYPT_DELIMITER}"; done)$(string_join "${MULTIENCRYPT_DELIMITER}" $(for j in $(seq 0 $((${#DETACHED_LUKS[@]}-1))); do echo "/dev/mapper/${BOOTS[0]}:ext4:/headers/${DETACHED_LUKS[${j}]}"; done))'
+EOF
+
+  # RAID arrays
+  arch-chroot "${1}" /bin/sh -c 'mdadm --detail --scan >> /etc/mdadm.conf'
+
+  # BIOS GRUB
+  for i in ${!BOOTDEVS}; do arch-chroot "${1}" /bin/sh -c "grub-install --target=i386-pc --recheck '${i}'"; done
+
+  # UEFI GRUB
+  for i in $(seq 0 $((${#ESPS[@]}-1))); do
+    umount -R "${1}/boot"
+    mount "/dev/mapper/${BOOTS[${i}]}" "${1}/boot"
+    mkdir -p "${1}/boot/efi"
+    mount "${ESPS[${i}]}" "${1}/boot/efi"
+    arch-chroot "${1}" /bin/sh -c "grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --removable"
+  done
+
+  # root
+  echo -e 'duckduckgoose\nduckduckgoose' | arch-chroot "${1}" passwd
+
+  BOOT_SEED="${BOOTS[${i}]}"
+}
+
+layout_partitions(){
+  local i
+  wipefs -a "${!BOOTDEVS}"
+  for i in "${!BOOTDEVS}"; do
+    parted "${i}" \
+      mklabel gpt \
+      mkpart primary 1MiB 2MiB \
+      mkpart primary fat32 2MiB 64MiB \
+      mkpart primary 64MiB 512MiB \
+      set 1 bios_grub on \
+      set 2 boot on \
+      set 2 esp on \
+      set 3 legacy_boot on
+    [ "${#BOOT_DEVICES[@]}" -le 0 ] && parted "${i}" mkpart primary 512MiB '100%' ||:
+  done
+}
+
+prep_bios_uefi(){
+  local i
+  layout_partitions
+  for i in "${!BOOTDEVS}"; do add_esp "${i}-part2"; add_luks_boot "${i}-part3"; done
+  for i in "${DEVICES[@]}"; do add_detached_luks "${i}${ROOTPART}"; done
+}
+
+prep_uefi_only(){
+  layout_partitions
+  local i esp_part="/dev/md/$(uuidgen)" boot_part="/dev/md/$(uuidgen)" bootdevs=("${!BOOTDEVS}")
+  for i in ${!BOOTDEVS/%/-part2}; do wait_for_device "${i}"; done
+  mdadm -C -l raid1 -e 1.0 -f -n "${#bootdevs[@]}" "${esp_part}" ${!BOOTDEVS/%/-part2}
+  add_esp "${esp_part}"
+  for i in ${!BOOTDEVS/%/-part3}; do wait_for_device "${i}"; done
+  mdadm -C -l raid1 -e 1.0 -f -n "${#bootdevs[@]}" "${boot_part}" ${!BOOTDEVS/%/-part3}
+  add_luks_boot "${boot_part}"
+  for i in ${DEVICES[@]/%/${ROOTPART}}; do add_detached_luks "${i}"; done
+  unset bootdevs
+}
+
+cleanup_common(){
+  local i
+  for i in ${BOOTS[@]}; do cryptsetup close "${i}" ||:; done
+  for i in ${DETACHED_LUKS[@]}; do cryptsetup close "${i}" ||:; done
+  mdadm -S /dev/md*
+}
+
+finish_arch(){
+  local i tmp_boot="$(mktemp -d)"
+  mount "/dev/mapper/${BOOT_SEED}" "${tmp_boot}"
+  for i in ${BOOTS[@]}; do
+    umount -R "${1}/boot"
+    #[ "${i}" = "${BOOT_SEED}" ] && continue ||:
+    mount "/dev/mapper/${i}" "${1}/boot"
+    rsync -xaSPAX -zz "${tmp_boot}/" "${1}/boot/"
+    mkdir -p "${1}/boot/headers"
+    rsync -xaSPAX -zz "${HEADER_TMPDIR}/" "${1}/boot/headers/"
+    arch-chroot "${1}" /bin/sh <<EOF
+mkinitcpio -P
+ZPOOL_VDEV_NAME_PATH=1 grub-mkconfig -o /boot/grub/grub.cfg
+EOF
+    #umount -R "${1}/boot"
+  done
+  umount "${tmp_boot}"
+  rm -rf "${HEADER_TMPDIR}"  # shred?
+}

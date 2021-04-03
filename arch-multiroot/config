@@ -1,0 +1,23 @@
+ROOT_COUNT=3
+
+# crypto config
+CRYPTO_HASH="sha512"
+CRYPTO_CIPHER="aes-xts-plain64"
+CRYPTO_KEYSIZE="512"
+CRYPTO_OFFSET="32768"  # in * 512-byte sectors = 16MB (luks header size)
+CRYPTO_SKIP=""
+
+# ZFS config
+ZPOOL_TOPOLOGY="raidz1"
+ZPOOL_NAME="pool-$(uuidgen)"
+MOUNTPOINT="/mnt"
+
+# LUKS-on-LVM config
+VG_NAME="$(uuidgen)"
+
+DEVICES=(
+  "/dev/disk/by-id/ata-ST9160314AS_5VCK07VW"
+)
+BOOT_DEVICES=(
+  "/dev/disk/by-id/ata-FUJITSU_MHZ2160BH_K665T932HD6W"
+)
