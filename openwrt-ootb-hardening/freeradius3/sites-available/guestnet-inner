@@ -1,0 +1,88 @@
+server guestnet-inner {
+
+listen {
+	type = auth
+	interface = lo
+	ipaddr = 127.0.0.1
+	port = 18140
+}
+
+listen {
+	type = auth
+	interface = lo
+	ipaddr = ::1
+	port = 18140
+}
+
+authorize {
+	filter_username
+	filter_inner_identity
+	files_guestnet
+	#pap
+}
+
+#authenticate {
+#	pap
+#}
+
+#  Post-Authentication
+#  Once we KNOW that the user has been authenticated, there are
+#  additional steps we can take.
+#
+#  Note that the last packet of the inner-tunnel authentication
+#  MAY NOT BE the last packet of the outer session.  So updating
+#  the outer reply MIGHT work, and sometimes MIGHT NOT.  The
+#  exact functionality depends on both the inner and outer
+#  authentication methods.
+#
+#  If you need to send a reply attribute in the outer session,
+#  the ONLY safe way is to set "use_tunneled_reply = yes", and
+#  then update the inner-tunnel reply.
+#post-auth {
+	#
+	#  These attributes are for the inner-tunnel only,
+	#  and MUST NOT be copied to the outer reply.
+	#
+#	update reply {
+#		User-Name !* ANY
+#		Message-Authenticator !* ANY
+#		EAP-Message !* ANY
+#		Proxy-State !* ANY
+#		MS-MPPE-Encryption-Types !* ANY
+#		MS-MPPE-Encryption-Policy !* ANY
+#		MS-MPPE-Send-Key !* ANY
+#		MS-MPPE-Recv-Key !* ANY
+#	}
+
+	#
+	#  Copy the inner reply attributes to the outer
+	#  session-state list.  The post-auth policy will take
+	#  care of copying the outer session-state list to the
+	#  outer reply.
+	#
+#	update {
+#		&outer.session-state: += &reply:
+#	}
+
+	#
+	#  Access-Reject packets are sent through the REJECT sub-section of the
+	#  post-auth section.
+	#
+	#  Add the ldap module name (or instance) if you have set
+	#  'edir = yes' in the ldap module configuration
+	#
+#	Post-Auth-Type REJECT {
+		# log failed authentications in SQL, too.
+#		-sql
+#		attr_filter.access_reject
+
+		#
+		#  Let the outer session know which module failed, and why.
+		#
+#		update outer.session-state {
+#			&Module-Failure-Message := &request:Module-Failure-Message
+#		}
+#	}
+#}
+
+}

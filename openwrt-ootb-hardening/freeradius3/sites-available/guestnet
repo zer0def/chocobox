@@ -1,0 +1,213 @@
+server guestnet {
+
+listen {
+	type = auth
+	interface = lo
+	ipaddr = 127.0.0.1
+	port = 1814
+	limit {
+		max_connections = 16
+		lifetime = 0
+		idle_timeout = 30
+	}
+}
+
+listen {
+	type = auth
+	interface = lo
+	ipaddr = ::1
+	port = 1814
+	limit {
+		max_connections = 16
+		lifetime = 0
+		idle_timeout = 30
+	}
+}
+
+listen {
+	type = acct
+	interface = lo
+	ipaddr = 127.0.0.1
+	port = 1815
+}
+
+listen {
+	type = acct
+	interface = lo
+	ipaddr = ::1
+	port = 1815
+}
+
+authorize {
+	filter_username
+	filter_password
+	preprocess
+	eap_guestnet {
+		ok = return
+		updated = return
+	}
+}
+
+authenticate {
+	Auth-Type eap_guestnet {
+		eap_guestnet
+	}
+}
+
+
+#
+#  Pre-accounting.  Decide which accounting type to use.
+#
+preacct {
+	preprocess
+
+	#
+	#  Ensure that we have a semi-unique identifier for every
+	#  request, and many NAS boxes are broken.
+	#acct_unique
+
+	#
+	#  Read the 'acct_users' file
+#	files
+}
+
+#  Post-Authentication
+#  Once we KNOW that the user has been authenticated, there are
+#  additional steps we can take.
+post-auth {
+	#
+	#  If you need to have a State attribute, you can
+	#  add it here.  e.g. for later CoA-Request with
+	#  State, and Service-Type = Authorize-Only.
+	#
+#	if (!&reply:State) {
+#		update reply {
+#			State := "0x%{randstr:16h}"
+#		}
+#	}
+
+	#
+	#  For EAP-TTLS and PEAP, add the cached attributes to the reply.
+	#  The "session-state" attributes are automatically cached when
+	#  an Access-Challenge is sent, and automatically retrieved
+	#  when an Access-Request is received.
+	#
+	#  The session-state attributes are automatically deleted after
+	#  an Access-Reject or Access-Accept is sent.
+	#
+	#  If both session-state and reply contain a User-Name attribute, remove
+	#  the one in the reply if it is just a copy of the one in the request, so
+	#  we don't end up with two User-Name attributes.
+
+	if (session-state:User-Name && reply:User-Name && request:User-Name && (reply:User-Name == request:User-Name)) {
+		update reply {
+			&User-Name !* ANY
+		}
+	}
+	update {
+		&reply: += &session-state:
+	}
+
+	#  Refresh leases when we see a start or alive. Return an address to
+	#  the IP Pool when we see a stop record.
+#	sqlippool
+
+
+	#  Create the CUI value and add the attribute to Access-Accept.
+	#  Uncomment the line below if *returning* the CUI.
+#	cui
+
+	#  Create empty accounting session to make simultaneous check
+	#  more robust. See the accounting queries configuration in
+	#  raddb/mods-config/sql/main/*/queries.conf for details.
+	#
+	#  The "sql_session_start" policy is defined in
+	#  raddb/policy.d/accounting.  See that file for more details.
+#	sql_session_start
+
+	#
+	#  If you want to have a log of authentication replies,
+	#  un-comment the following line, and enable the
+	#  'detail reply_log' module.
+#	reply_log
+
+	#  If there is a client certificate (EAP-TLS, sometimes PEAP
+	#  and TTLS), then some attributes are filled out after the
+	#  certificate verification has been performed.  These fields
+	#  MAY be available during the authentication, or they may be
+	#  available only in the "post-auth" section.
+	#
+	#  The first set of attributes contains information about the
+	#  issuing certificate which is being used.  The second
+	#  contains information about the client certificate (if
+	#  available).
+#
+#	update reply {
+#		Reply-Message += "%{TLS-Cert-Serial}"
+#		Reply-Message += "%{TLS-Cert-Expiration}"
+#		Reply-Message += "%{TLS-Cert-Subject}"
+#		Reply-Message += "%{TLS-Cert-Issuer}"
+#		Reply-Message += "%{TLS-Cert-Common-Name}"
+#		Reply-Message += "%{TLS-Cert-Subject-Alt-Name-Email}"
+#
+#		Reply-Message += "%{TLS-Client-Cert-Serial}"
+#		Reply-Message += "%{TLS-Client-Cert-Expiration}"
+#		Reply-Message += "%{TLS-Client-Cert-Subject}"
+#		Reply-Message += "%{TLS-Client-Cert-Issuer}"
+#		Reply-Message += "%{TLS-Client-Cert-Common-Name}"
+#		Reply-Message += "%{TLS-Client-Cert-Subject-Alt-Name-Email}"
+#	}
+
+	#  Insert class attribute (with unique value) into response,
+	#  aids matching auth and acct records, and protects against duplicate
+	#  Acct-Session-Id. Note: Only works if the NAS has implemented
+	#  RFC 2865 behaviour for the class attribute, AND if the NAS
+	#  supports long Class attributes.  Many older or cheap NASes
+	#  only support 16-octet Class attributes.
+#	insert_acct_class
+
+	#  MacSEC requires the use of EAP-Key-Name.  However, we don't
+	#  want to send it for all EAP sessions.  Therefore, the EAP
+	#  modules put required data into the EAP-Session-Id attribute.
+	#  This attribute is never put into a request or reply packet.
+	#
+	#  Uncomment the next few lines to copy the required data into
+	#  the EAP-Key-Name attribute
+#	if (&reply:EAP-Session-Id) {
+#		update reply {
+#			EAP-Key-Name := &reply:EAP-Session-Id
+#		}
+#	}
+
+	#  Remove reply message if the response contains an EAP-Message
+	remove_reply_message_if_eap
+
+	#
+	#  Access-Reject packets are sent through the REJECT sub-section of the
+	#  post-auth section.
+	#
+	#  Add the ldap module name (or instance) if you have set
+	#  'edir = yes' in the ldap module configuration
+	#
+	#  The "session-state" attributes are not available here.
+	#
+	Post-Auth-Type REJECT {
+		# Insert EAP-Failure message if the request was
+		# rejected by policy instead of because of an
+		# authentication failure
+		eap_guestnet
+
+		#  Remove reply message if the response contains an EAP-Message
+		remove_reply_message_if_eap
+	}
+
+	#
+	#  Filter access challenges.
+	#
+	Post-Auth-Type Challenge {
+#		remove_reply_message_if_eap
+#		attr_filter.access_challenge.post-auth
+	}
+}
+
+}

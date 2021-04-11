@@ -1,0 +1,170 @@
+eap eap_guestnet {
+	default_eap_type = pwd
+	timer_expire = 60
+	ignore_unknown_eap_types = no
+	cisco_accounting_username_bug = no
+	max_sessions = ${max_requests}
+	pwd {
+		group = 21
+		server_id = theserver@example.com
+		#fragment_size = 1020
+		virtual_server = guestnet-inner
+	}
+
+	# Windows compat, because Microsoft is still moronic - broken, do not use
+	#
+	# This turns the setup into security theater, because there's no safe way
+	# to make Microsoft's supplicant happy on the guest system without
+	# risking man-in-the-middle, unless they are preloaded with either of:
+	# - a better supplicant, to use EAP-PWD
+	# - certificates to verify against, but then you could use EAP-TLS instead
+	#
+	#ttls {
+	#	tls = tls-guestnet
+	#	default_eap_type = pap
+	#	copy_request_to_tunnel = yes
+	#	virtual_server = guestnet-inner
+
+		#  Unlike EAP-TLS, EAP-TTLS does not require a client
+		#  certificate. However, you can require one by setting the
+		#  following option. You can also override this option by
+		#  setting
+		#
+		#	EAP-TLS-Require-Client-Cert = Yes
+		#
+		#  in the control items for a request.
+		#
+		#  Note that the majority of supplicants do not support using a
+		#  client certificate with EAP-TTLS, so this option is unlikely
+		#  to be usable for most people.
+		#
+
+		# You should mandate a cert on a *PRIVATE* network, but
+		# on a *GUEST* one it's impossible to pull off
+	#	require_client_cert = no
+	#}
+
+	tls {
+		tls = tls-guestnet
+		#virtual_server = guestnet
+	}
+
+	tls-config tls-guestnet {
+		private_key_file = /etc/easy-rsa-guest/pki/private/ap.key
+		certificate_file = /etc/easy-rsa-guest/pki/issued/ap.crt
+		ca_file = /etc/easy-rsa-guest/pki/cacrl.pem
+		auto_chain = yes
+		dh_file = /etc/easy-rsa-guest/pki/dh.pem
+		#random_file = /dev/urandom
+		#fragment_size = 1024
+		check_crl = yes
+		allow_expired_crl = no
+		#check_cert_issuer = "/C=GB/ST=Berkshire/L=Newbury/O=My Company Ltd"
+		#check_cert_cn = %{User-Name}
+		cipher_list = "kEECDH+aRSA+CHACHA20:kEECDH+aRSA+CAMELLIA256:kEECDH+aRSA+AESGCM:kDHE+aRSA+AESGCM:!AES128"
+		cipher_server_preference = yes
+		tls_min_version = "1.2"
+		tls_max_version = "1.2"
+		ecdh_curve = "secp521r1"
+		cache {
+			enable = no
+			lifetime = 24  # hours
+			store {
+				Tunnel-Private-Group-Id
+			}
+		}
+
+		#  As of version 2.1.10, client certificates can be
+		#  validated via an external command.  This allows
+		#  dynamic CRLs or OCSP to be used.
+		#
+		#  This configuration is commented out in the
+		#  default configuration.  Uncomment it, and configure
+		#  the correct paths below to enable it.
+		#
+		#  If OCSP checking is enabled, and the OCSP checks fail,
+		#  the verify section is not run.
+		#
+		#  If OCSP checking is disabled, the verify section is
+		#  run on successful certificate validation.
+		#
+	#	verify {
+			#  If the OCSP checks succeed, the verify section
+			#  is run to allow additional checks.
+			#
+			#  If you want to skip verify on OCSP success,
+			#  uncomment this configuration item, and set it
+			#  to "yes".
+			#
+		#	skip_if_ocsp_ok = no
+
+			#  A temporary directory where the client
+			#  certificates are stored.  This directory
+			#  MUST be owned by the UID of the server,
+			#  and MUST not be accessible by any other
+			#  users.  When the server starts, it will do
+			#  "chmod go-rwx" on the directory, for
+			#  security reasons.  The directory MUST
+			#  exist when the server starts.
+			#
+			#  You should also delete all of the files
+			#  in the directory when the server starts.
+			#
+		#	tmpdir = /tmp/radiusd
+
+			#  The command used to verify the client cert.
+			#  We recommend using the OpenSSL command-line
+			#  tool.
+			#
+			#  The ${..ca_path} text is a reference to
+			#  the ca_path variable defined above.
+			#
+			#  The %{TLS-Client-Cert-Filename} is the name
+			#  of the temporary file containing the cert
+			#  in PEM format.  This file is automatically
+			#  deleted by the server when the command
+			#  returns.
+			#
+		#	client = "/path/to/openssl verify -CApath ${..ca_path} %{TLS-Client-Cert-Filename}"
+	#	}
+	}
+}
+
+eap eap_hostnet {
+	default_eap_type = tls
+	timer_expire = 60
+	ignore_unknown_eap_types = no
+	cisco_accounting_username_bug = no
+	max_sessions = ${max_requests}
+
+	tls {
+		tls = tls-hostnet
+		#virtual_server = hostnet
+	}
+
+	tls-config tls-hostnet {
+		private_key_file = /etc/easy-rsa/pki/private/ap.key
+		certificate_file = /etc/easy-rsa/pki/issued/ap.crt
+		ca_file = /etc/easy-rsa/pki/cacrl.pem
+		auto_chain = yes
+		dh_file = /etc/easy-rsa/pki/dh.pem
+		#random_file = /dev/urandom
+		#fragment_size = 1024
+		check_crl = yes
+		allow_expired_crl = no
+		#check_cert_issuer = "/C=GB/ST=Berkshire/L=Newbury/O=My Company Ltd"
+		#check_cert_cn = %{User-Name}
+		cipher_list = "kEECDH+aRSA+CHACHA20:kEECDH+aRSA+CAMELLIA256:kEECDH+aRSA+AESGCM:kDHE+aRSA+AESGCM:!AES128"
+		cipher_server_preference = yes
+		tls_min_version = "1.2"
+		tls_max_version = "1.2"
+		ecdh_curve = "secp521r1"
+		cache {
+			enable = no
+			lifetime = 24  # hours
+			store {
+				Tunnel-Private-Group-Id
+			}
+		}
+	}
+}
