@@ -1,0 +1,189 @@
+ASSETS_DIR="${ASSETS_DIR:-${MYDIR}}"
+APKS=(
+  # package managers
+  "$(find_latest "${ASSETS_DIR}" 'AppManager_*.apk')"  # https://github.com/MuntashirAkon/AppManager
+  #"$(find_latest "${ASSETS_DIR}" 'io.github.muntashirakon.AppManager_*.apk')"  # https://f-droid.org/en/packages/io.github.muntashirakon.AppManager/
+
+  # https://appops.rikka.app # https://github.com/RikkaApps/App-Ops-issue-tracker
+  #"$(find_latest "${ASSETS_DIR}" 'appops-v*.apk')"
+
+  # firewalls
+  "$(find_latest "${ASSETS_DIR}" 'AFWall_*.apk')"  # https://github.com/ukanth/afwall
+  #"$(find_latest "${ASSETS_DIR}" 'dev.ukanth.ufirewall_*.apk')"  # https://f-droid.org/en/packages/dev.ukanth.ufirewall/
+  "$(find_latest "${ASSETS_DIR}" 'NetGuard-v*-release.apk')"  # https://github.com/M66B/NetGuard
+  #"$(find_latest "${ASSETS_DIR}" 'eu.faircode.netguard_*.apk')"  # https://f-droid.org/en/packages/eu.faircode.netguard/
+
+  # cameras
+  # https://guardianproject.info/apps/obscuracam/ # https://github.com/guardianproject/ObscuraCam # https://f-droid.org/en/packages/org.witness.sscphase1/
+  "$(find_latest "${ASSETS_DIR}" 'ObscuraCam-*-release.apk')"
+  "$(find_latest "${ASSETS_DIR}" 'net.sourceforge.opencamera_*.apk')"  # https://f-droid.org/en/packages/net.sourceforge.opencamera/
+
+  # web browsers
+  # https://gitlab.com/divested-mobile/mull-fenix # https://f-droid.org/en/packages/us.spotco.fennec_dos/
+  "$(find_latest "${ASSETS_DIR}" 'us.spotco.fennec_dos_*.apk')"
+  "$(find_latest "${ASSETS_DIR}" 'com.stoutner.privacybrowser.standard_*.apk')"  # https://f-droid.org/en/packages/com.stoutner.privacybrowser.standard/
+
+  # privacy
+  # https://github.com/M66B/XPrivacyLua
+  "$(find_latest "${ASSETS_DIR}" 'eu.faircode.xlua_*.apk')"  # https://f-droid.org/en/packages/eu.faircode.xlua/
+  "$(find_latest "${ASSETS_DIR}" 'XPrivacyLuaPro-v*-release.apk')"  # https://bitbucket.org/M66B/xlua-companion/downloads/
+
+  # https://github.com/Ch4t4r/Nebulo # https://git.frostnerd.com/PublicAndroidApps/smokescreen
+  #"$(find_latest "${ASSETS_DIR}" 'Nebulo-*.apk')"
+
+  # https://cgit.typeblog.net/Shelter # https://fdroid.typeblog.net/
+  #"$(find_latest "${ASSETS_DIR}" 'shelter-*.apk')"  # https://github.com/PeterCxy/Shelter
+  "$(find_latest "${ASSETS_DIR}" 'net.typeblog.shelter_*.apk')"  # https://f-droid.org/en/packages/net.typeblog.shelter/
+
+  # https://auroraoss.com/
+  "$(find_latest "${ASSETS_DIR}" 'AuroraStore_*.apk')"  # https://gitlab.com/AuroraOSS/AuroraStore
+  #"$(find_latest "${ASSETS_DIR}" 'com.aurora.store_*.apk')"  # https://f-droid.org/en/packages/com.aurora.store/
+  "$(find_latest "${ASSETS_DIR}" 'AuroraServices_v*.apk')"  # https://gitlab.com/AuroraOSS/AuroraServices
+
+  # comms
+  # Encrypted texting # https://silence.im/ # https://git.silence.dev/Silence/Silence-Android/
+  "$(find_latest "${ASSETS_DIR}" 'org.smssecure.smssecure_*.apk')"  # https://f-droid.org/en/packages/org.smssecure.smssecure/
+
+  # https://github.com/ubergeek42/weechat-android
+  "$(find_latest "${ASSETS_DIR}" 'com.ubergeek42.WeechatAndroid_*.apk')"  # https://f-droid.org/en/packages/com.ubergeek42.WeechatAndroid/
+
+  # Tox
+  #"$(find_latest "${ASSETS_DIR}" 'play.trifa_*.apk')"  # https://github.com/zoff99/ToxAndroidRefImpl
+  "$(find_latest "${ASSETS_DIR}" 'com.zoffcc.applications.trifa_*.apk')"  # https://f-droid.org/en/packages/com.zoffcc.applications.trifa/
+  "$(find_latest "${ASSETS_DIR}" 'com.google.zxing.client.android_*.apk')"  # https://f-droid.org/en/packages/com.google.zxing.client.android/
+
+  ## Signal # https://github.com/signalapp/Signal-Android
+  # https://molly.im/fdroid # https://github.com/mollyim/mollyim-android
+  "$(find_latest "${ASSETS_DIR}" 'Molly-v*-*-FOSS.apk')"
+  "$(find_latest "${ASSETS_DIR}" 'Signal-FOSS-v*.apk')"  # https://github.com/tw-hx/Signal-Android
+
+  # Matrix/SchildiChat # https://s2.spiritcroc.de/fdroid/repo?fingerprint=6612ade7e93174a589cf5ba26ed3ab28231a789640546c8f30375ef045bc9242
+  "$(find_latest "${ASSETS_DIR}" 'de.spiritcroc.riotx.foss_*.apk')"
+
+  ## XMPP
+  # https://conversations.im/ IPv6-friendly fork # https://dev.sum7.eu/sum7/Conversations
+  "$(find_latest "${ASSETS_DIR}" 'eu.sum7.conversations_*.apk')"  # https://f-droid.org/en/packages/eu.sum7.conversations/
+
+  # call blocker with number review databases # https://gitlab.com/xynngh/YetAnotherCallBlocker
+  "$(find_latest "${ASSETS_DIR}" 'dummydomain.yetanothercallblocker_*.apk')"
+
+  # media
+  "$(find_latest "${ASSETS_DIR}" 'mpv-android-*.apk')"  # https://github.com/mpv-android/mpv-android
+  #"$(find_latest "${ASSETS_DIR}" 'is.xyz.mpv_*.apk')"  # https://f-droid.org/en/packages/is.xyz.mpv/
+
+  "$(find_latest "${ASSETS_DIR}" 'Twire-*.apk')"  # https://github.com/twireapp/Twire
+  #"$(find_latest "${ASSETS_DIR}" 'com.perflyst.twire_*.apk')"  # https://f-droid.org/en/packages/com.perflyst.twire/
+
+  "$(find_latest "${ASSETS_DIR}" 'NewPipe_v*.apk')"  # https://github.com/TeamNewPipe/NewPipe
+  #"$(find_latest "${ASSETS_DIR}" 'org.schabi.newpipe_*.apk')"  # https://f-droid.org/en/packages/org.schabi.newpipe/
+
+  # utils
+  "$(find_latest "${ASSETS_DIR}" 'com.termux_*.apk')"  # https://github.com/termux/termux-app # https://f-droid.org/en/packages/com.termux/
+
+  # https://github.com/Kunzisoft/KeePassDX # https://f-droid.org/en/packages/com.kunzisoft.keepass.libre/
+  "$(find_latest "${ASSETS_DIR}" 'KeePassDX-*.apk')"
+
+  "$(find_latest "${ASSETS_DIR}" 'FairEmail-v*-github-release.apk')"  # https://github.com/M66B/FairEmail
+  #"$(find_latest "${ASSETS_DIR}" 'eu.faircode.email_*.apk')"  # https://f-droid.org/en/packages/eu.faircode.email/
+
+  "$(find_latest "${ASSETS_DIR}" 'hackerskeyboard-v*.apk')"  # https://github.com/klausw/hackerskeyboard
+  #"$(find_latest "${ASSETS_DIR}" 'org.pocketworkstation.pckeyboard_*.apk')"  # https://f-droid.org/en/packages/org.pocketworkstation.pckeyboard/
+
+  # rclone # https://github.com/x0b/rcx # https://f-droid.org/en/packages/io.github.x0b.rcx/
+  "$(find_latest "${ASSETS_DIR}" 'rcx-v*.apk')"
+
+  # Navi
+  "$(find_latest "${ASSETS_DIR}" 'gpsTest-v*.apk')"  # https://github.com/barbeau/gpstest
+  # https://gitlab.com/divested-mobile/maps # https://f-droid.org/en/packages/us.spotco.maps/
+  "$(find_latest "${ASSETS_DIR}" 'us.spotco.maps_*.apk')"
+
+  # https://osmand.net/downloads # https://f-droid.org/en/packages/net.osmand.plus/
+  "$(find_latest "${ASSETS_DIR}" 'net.osmand*.apk')"
+)
+
+MAGISK_MODULES=(
+  "$(find_latest "${ASSETS_DIR}" 'Busybox_for_Android_NDK-*.zip')"  # https://github.com/Magisk-Modules-Repo/busybox-ndk
+  "$(find_latest "${ASSETS_DIR}" 'MagiskHidePropsConf-v*.zip')"  # https://github.com/Magisk-Modules-Repo/MagiskHidePropsConf
+  "$(find_latest "${ASSETS_DIR}" 'riru-v*.zip')"  # https://github.com/RikkaApps/Riru
+  "$(find_latest "${ASSETS_DIR}" 'riru-unshare-*.zip')"  # https://github.com/vvb2060/riru-unshare
+  "$(find_latest "${ASSETS_DIR}" 'AuroraServices-v*-magisk-unity.zip')"  # https://gitlab.com/AuroraOSS/AuroraServices
+)
+
+adb wait-for-usb-device
+
+# https://invizible.net/en/
+[ "$(adb shell getprop ro.product.cpu.abi)" != "arm64-v8a" ] || INVIZIBLE_ARCH="_arm64"
+APKS+=(
+  "$(find_latest "${ASSETS_DIR}" "Invizible_*_ver.*${INVIZIBLE_ARCH}.apk")"  # https://github.com/Gedsh/InviZible
+  #"$(find_latest "${ASSETS_DIR}" 'pan.alexander.tordnscrypt.stable_*.apk')"  # https://f-droid.org/packages/pan.alexander.tordnscrypt.stable/
+)
+
+[ "$(adb shell getprop ro.build.version.sdk)" -ge 26 ] && APKS+=(
+  "$(find_latest "${ASSETS_DIR}" 'AdAway-5.*.apk')"
+) || APKS+=(
+  "$(find_latest "${ASSETS_DIR}" 'AdAway-4.*.apk')"
+)
+
+#[ "$(adb shell getprop ro.build.version.sdk)" -ge 24 ] && APKS+=(
+#  "$(find_latest "${ASSETS_DIR}" 'blokada-v5.*.apk')"
+#) || APKS+=(
+#  "$(find_latest "${ASSETS_DIR}" 'blokada-v4.*.apk')"
+#)
+
+if [ "${MICROG:-1}" -eq 1 ]; then
+  APKS+=(
+    "$(find_latest "${ASSETS_DIR}" 'microG_GmsCore-v*.apk')"  # https://github.com/microg/GmsCore
+#    "$(find_latest "${ASSETS_DIR}" 'microG_Installer_Revived_GmsCore-Revived_*.apk')"
+#    "$(find_latest "${ASSETS_DIR}" 'FakeGApps-*.apk')"  # https://github.com/whew-inc/FakeGApps
+  )
+#  MAGISK_MODULES+=(
+#    "$(find_latest "${ASSETS_DIR}" 'microG_Installer_Revived-Revived_*.zip')"  # https://github.com/nift4/microg_installer_revived
+#  )
+fi
+
+if [ "$(adb shell getprop ro.build.version.sdk)" -ge 21 -a "$(adb shell getprop ro.build.version.sdk)" -lt 27 ]; then
+  # https://github.com/Magisk-Modules-Repo/xposed/issues/1#issuecomment-806776868
+  MAGISK_MODULES+=(
+    "$(find_latest "${ASSETS_DIR}" 'Xposed_Framework-v*.zip')"
+  )
+  APKS+=(
+    "$(find_latest "${ASSETS_DIR}" 'XposedInstaller_*-Magisk.apk')"
+  )
+fi
+
+if [ "$(adb shell getprop ro.build.version.sdk)" -ge 26 ]; then
+  APKS+=(
+    #"$(find_latest "${ASSETS_DIR}" 'EdXposedManager-*-org.meowcat.edxposed.manager-release.apk')"  # https://github.com/ElderDrivers/EdXposedManager
+
+    #"$(find_latest "${ASSETS_DIR}" 'oandbackupx-*.apk')"  # https://github.com/machiav3lli/oandbackupx
+    #"$(find_latest "${ASSETS_DIR}" 'com.machiav3lli.backup_*.apk')"  # https://f-droid.org/en/packages/com.machiav3lli.backup/
+  )
+  MAGISK_MODULES+=(
+    "$(find_latest "${ASSETS_DIR}" 'sui-v*.zip')"  # https://github.com/RikkaApps/Sui
+    #"$(find_latest "${ASSETS_DIR}" 'EdXposed-v*-master.zip')"  # https://github.com/ElderDrivers/EdXposed
+  )
+else
+  APKS+=(
+    #"$(find_latest "${ASSETS_DIR}" 'oandbackupx-*-pre-and8.apk')"
+    #"$(find_latest "${ASSETS_DIR}" 'shizuku-*-release.apk')"  # https://github.com/RikkaApps/Shizuku
+  )
+fi
+
+if [ "$(adb shell getprop ro.build.version.sdk)" -ge 27 ]; then
+  MAGISK_MODULES+=(
+    "$(find_latest "${ASSETS_DIR}" 'safetynet-fix-v2.1.*.zip')"  # https://github.com/kdrag0n/safetynet-fix
+    "$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-release.zip')"  # https://github.com/LSPosed/LSPosed
+  )
+  APKS+=(
+    "$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-release.apk')"  # https://github.com/LSPosed/LSPosed
+  )
+fi
+if [ "$(adb shell getprop ro.build.version.sdk)" -ge 28 ]; then
+  APKS+=(
+    #"$(find_latest "${ASSETS_DIR}" 'RnIntentClean-v*.apk')"  # https://github.com/TigerBeanst/RnIntentClean
+    #"$(find_latest "${ASSETS_DIR}" 'com.jakting.shareclean_*.apk')"  # https://ic.into.icu/
+  )
+  MAGISK_MODULES+=(
+    "$(find_latest "${ASSETS_DIR}" 'riru-ifw-enhance-v*-release.zip')"  # https://github.com/Kr328/Riru-IFWEnhance
+  )
+fi

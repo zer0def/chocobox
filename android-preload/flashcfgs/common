@@ -1,0 +1,16 @@
+COMPLEMENT_ZIPS=(
+  "$(find_latest "${MYDIR}" 'NanoDroid-BromiteWebView-*.zip')"
+  #"$(find_latest "${MYDIR}" 'NanoDroid-OsmAnd-*.zip')"
+)
+
+if [ "${MICROG:-1}" -eq 1 ]; then
+  COMPLEMENT_ZIPS+=(
+    "$(find_latest "${MYDIR}" 'NanoDroid-fdroid-*.zip')"
+    "$(find_latest "${MYDIR}" 'NanoDroid-patcher-*.zip')"
+    "$(find_latest "${MYDIR}" 'NanoDroid-microG-*.zip')"
+  )
+else
+  COMPLEMENT_ZIPS+=(
+    "$(find_latest "${MYDIR}" 'NanoDroid-full-*.zip')"
+  )
+fi

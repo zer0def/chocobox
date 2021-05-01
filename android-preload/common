@@ -1,0 +1,225 @@
+find_latest(){
+  find "${1}" -type f -name "$(for i in $(find "${1}" -type f -name "${2}"); do echo ${i##*/}; done | sort -ur | head -n1)"
+}
+
+MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-v*.apk')"
+[ -n "${MAGISK_ZIP}" ] || MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-v*.zip')"
+MAGISK_MAN_APK="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-v*.apk')"
+[ -n "${MAGISK_MAN_APK}" ] || MAGISK_MAN_APK="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'MagiskManager-v*.zip')"
+
+adb_reboot(){
+  until adb reboot "${1}"; do sleep 3; done
+}
+
+reboot_and_wait_for_recovery(){
+  adb_reboot recovery; adb wait-for-usb-recovery
+  # `adb shell` is a further synchronization primitive here, because splashscreens
+  adb shell; adb wait-for-usb-recovery
+}
+
+preload_ota_cfg_common(){
+  local TMPFILE="$(mktemp)"
+
+  # OpenGApps:
+  # - https://github.com/opengapps/opengapps/wiki/Package-Comparison
+  # - https://github.com/opengapps/opengapps/wiki/Advanced-Features-and-Options
+  adb shell mkdir -p /tmp/install
+  cat <<EOF >"${TMPFILE}"
+NoDebug
+Include
+
+#CameraGoogle
+
+# Prevent stock app removal
+#+CameraStock
++DialerStock
++Gallery
++Launcher
++PicoTTS
+
+CMAudioFX
+CMBugReport
+CMMusic
+CMUpdater
+
+LRecorder
+LUpdater
+
+BasicDreams
+Browser
+Email
+FMRadio
+MMS
+SoundRecorder
+Terminal
+WebViewStock
+
+(AEXPapers)
+(CameraStock)
+(crDroidMusic)
+(DuckDuckGo)
+(EasterEgg)
+(messaging)
+(MusicFX)
+(Phonograph)
+(Recorder)
+(ViaBrowser)
+EOF
+  adb push "${TMPFILE}" /tmp/install/.gapps-config || adb push "${TMPFILE}" /data/.gapps-config || adb push "${TMPFILE}" /sdcard/.gapps-config
+
+  # NanoDroid: https://gitlab.com/Nanolx/NanoDroid/-/blob/master/doc/AlterInstallation.md
+  cat <<EOF >"${TMPFILE}"
+nanodroid_microg=${MICROG:-1}
+#nanodroid_nlpbackend=1111
+nanodroid_nlpbackend=1101
+nanodroid_mapsv1=1
+#nanodroid_play=21
+nanodroid_play=${MICROG:-1}0
+#nanodroid_fdroid=3
+nanodroid_fdroid=1
+nanodroid_apps=0
+nanodroid_overlay=1
+nanodroid_bash=0
+EOF
+  adb push "${TMPFILE}" /tmp/.nanodroid-setup || adb push "${TMPFILE}" /data/.nanodroid-setup
+
+  # Magisk: https://www.didgeridoohan.com/magisk/MagiskInstallationIssues
+  cat <<EOF >"${TMPFILE}"
+KEEPFORCEENCRYPT=true
+EOF
+  adb push "${TMPFILE}" /cache/.magisk || adb push "${TMPFILE}" /data/.magisk
+  rm "${TMPFILE}"
+}
+
+ota_pkg_sideload(){
+  local i
+
+  adb wait-for-usb-recovery
+  for i in "${@}"; do
+    adb shell twrp sideload
+    adb wait-for-usb-sideload
+    adb sideload "${i}"
+    adb wait-for-usb-recovery
+  done
+}
+
+ota_push_remote_path(){
+  #for i in $(adb shell "df 2>/dev/null | awk '/\/(data|sdcard|cache|tmp)/ {print \$NF\" \"\$(NF-2)}' | sort -rnu -k2 | awk '{print \$1}'" | sed 's/\r//g'); do
+  for i in $(adb shell "df 2>/dev/null | grep -E '/(data|sdcard|cache|tmp)' | cut -F4,6 | sort -rnu -k2 | cut -F2" | sed 's/\r//g'); do
+    [ -z "`adb shell "awk '/ ${i/\//\\\/} [^, ]*[, ]ro[, ]/ {print $2}' /proc/mounts || (grep -E '${i} [^, ]*[, ]ro[, ]' /proc/mounts | cut -F2)"`" ] && echo ${i} && return 0 ||:
+  done
+}
+
+ota_pkg_push(){
+  local i remote_path="$(ota_push_remote_path)"
+
+  adb wait-for-usb-recovery
+  for i in "${@}"; do
+    adb push "${i}" "${remote_path}/${i##*/}"
+    adb shell "twrp install '${remote_path}/${i##*/}' && (rm '${remote_path}/${i##*/}' ||:)"
+    adb wait-for-usb-recovery
+  done
+}
+
+wipe_data(){
+  adb wait-for-usb-recovery
+  cat <<'EOF' | adb shell sh -x
+BLK_SIZE=1024
+CRYPTO_FOOTER_LEN=16
+
+BLK_DEV="$(readlink -f $(find /dev/block -type l -iname "userdata" | head -n1) || readlink -f /dev/block/by-name/userdata)"
+BLK_CNT="$(awk "/${BLK_DEV##*/}/ {print \$(NF-1)}" /proc/partitions || (grep -E "${BLK_DEV##*/}" /proc/partitions | cut -F4))"
+BLK_CNT="$((${BLK_CNT}-${CRYPTO_FOOTER_LEN}))"
+dd if=/dev/zero of="${BLK_DEV}" bs="${BLK_SIZE}" skip=${BLK_CNT} count="${CRYPTO_FOOTER_LEN}"
+make_ext4fs -l "$((${BLK_CNT}*${BLK_SIZE}))" -a /data "${BLK_DEV}" || mke2fs -t ext4 "${BLK_DEV}" "${BLK_CNT}"
+#mkfs.f2fs -w "${BLK_SIZE}" "${BLK_DEV}" "${BLK_CNT}"
+exit
+EOF
+  adb wait-for-usb-recovery
+}
+
+setup_encryption(){
+  adb wait-for-usb-device
+  read -p "Settings -> Security -> Encryption and credentials -> Encrypt phone"
+  read -p "Settings -> Security -> Screen lock -> Secure startup"
+  adb wait-for-usb-device
+}
+
+magisk_boot_patch(){
+  local BOOT_IMG_TYPE="${BOOT_IMG_TYPE:=boot}"
+  local BOOT_PART="\$(readlink -f \$(find /dev/block -type l -name '${BOOT_IMG_TYPE}' | head -n1))"
+  local TMP_BOOT_IMG="$(mktemp)"
+
+  adb wait-for-usb-recovery
+  preload_ota_cfg
+  [ -n "${MAGISK_BOOT_PATCH}" ] || "ota_pkg_${OTA_METHOD:-push}" "${MAGISK_ZIP}"
+  [ -z "${MAGISK_BOOT_PATCH}" ] || (echo "cat ${BOOT_PART}" | adb shell >"${TMP_BOOT_IMG}")
+  "ota_pkg_${OTA_METHOD:-push}" "${COMPLEMENT_ZIPS[@]}"
+
+  adb_reboot system; adb wait-for-usb-device  # relies on USB debug being pre-enabled, not always the case
+  until adb install -r "${MAGISK_MAN_APK}"; do sleep 2; done
+
+  if [ -n "${MAGISK_BOOT_PATCH}" ]; then
+    local BOOT_IMG_PATH="/sdcard/${BOOT_IMG_TYPE}.img"
+    adb push "${TMP_BOOT_IMG}" "${BOOT_IMG_PATH}"
+
+    # might need to figure out activity doing this
+    read -p "Magisk -> Install -> Select and Patch a File -> select -> Let's Go"
+
+    echo 'cat $(ls -1t /sdcard/magisk_patched-*.img | head -n1)' | adb shell >"${TMP_BOOT_IMG}"
+    echo "rm \$(ls -1t /sdcard/magisk_patched-*.img | head -n1) ${BOOT_IMG_PATH}" | adb shell
+
+    reboot_and_wait_for_recovery
+    cat "${TMP_BOOT_IMG}" | adb shell dd of="${BOOT_PART}"
+
+    #adb_reboot bootloader; adb wait-for-usb-bootloader
+    #sudo fastboot flash boot "${TMP_BOOT_IMG}"; sudo fastboot reboot
+  fi
+}
+
+data_decryption_attempt(){
+  # https://twrp.me/faq/openrecoveryscript.html
+  local DECRYPT_PASSWORD="${1}"
+  [ -n "${DECRYPT_PASSWORD}" ] || read -rsp "Data partition password: " DECRYPT_PASSWORD
+
+  adb wait-for-usb-recovery
+  adb shell twrp decrypt "${DECRYPT_PASSWORD}" ||:
+  adb wait-for-usb-recovery
+}
+
+inject_boot_logcat(){
+  adb wait-for-usb-recovery
+  cat <<'EOD' | adb shell sh -x
+mount /system
+for i in $(find / -iname "*.prop"); do
+  cat <<EOF >>"${i}"
+ro.secure=0
+ro.adb.secure=0
+ro.debuggable=1
+persist.service.adb.enable=1
+persist.service.debuggable=1
+persist.sys.usb.config=mtp,adb
+EOF
+done
+EOD
+}
+
+magisk_module_install_system(){
+  local i
+  #until adb shell touch "${MAGISK_MODULE_LOC:=/sdcard}/.asdf"; do sleep 2; done
+  until adb shell su -c echo; do sleep 2; done
+  for i in "${@}"; do adb push "${i}" "${MAGISK_MODULE_LOC:=/sdcard}/${i##*/}"; done
+  cat <<EOF | adb shell sh -x
+for i in ${@}; do
+cat <<EOD | OUTFD=1 ASH_STANDALONE=1 su -c '\$(magisk --path)/.magisk/busybox/busybox sh'
+#rm -rf /data/adb/modules_update/*  # breaks module installation when they require reboots
+. /data/adb/magisk/util_functions.sh || . /data/magisk/util_functions.sh
+ZIPFILE="${MAGISK_MODULE_LOC}/\${i##*/}" install_module
+exit 0
+EOD
+rm "${MAGISK_MODULE_LOC}/\${i##*/}"
+done
+EOF
+  ## breaks module installation when they require reboots
+  #adb shell su -c 'rm -rf /data/adb/modules_update/*'
+}
