@@ -2,7 +2,7 @@
 MYDIR="$(dirname "$(readlink -f "${0}")")"
 
 opkg update
-opkg remove wpad-basic
+#opkg remove wpad-basic
 
 # defaulting to openssl as TLS impl, because openvpn-easy-rsa depends on it
 opkg install \
@@ -15,8 +15,8 @@ opkg install \
   freeradius3-mod-files \
   freeradius3-mod-preprocess \
   freeradius3-utils \
-  openvpn-easy-rsa \
-  wpad-openssl
+  openvpn-easy-rsa
+  #wpad-openssl
 
 /etc/init.d/dnscrypt-proxy enable
 
