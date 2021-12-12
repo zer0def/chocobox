@@ -40,9 +40,11 @@ for i in "${APKS[@]}"; do adb install -r "${i}"; done  # xargs?
 
 # https://sr.rikka.app , https://github.com/RikkaApps/StorageRedirect-assets
 if [ "$(adb shell getprop ro.build.version.sdk)" -ge 23 ]; then
-  adb install -r -i 'com.android.vending' "$(find_latest "${ASSETS_DIR}" "storage-isolation-v*-$(adb shell getprop ro.product.cpu.abi).apk")"
-  read -p "Launch Storage Isolation service from related app, now…"
-  magisk_module_install_system "$(find_latest "${ASSETS_DIR}" 'riru-storage-isolation-v*-release.zip')"
+  if [ -z "${ZYGISK}" ]; then
+    adb install -r -i 'com.android.vending' "$(find_latest "${ASSETS_DIR}" "storage-isolation-v*-$(adb shell getprop ro.product.cpu.abi).apk")"
+    read -p "Launch Storage Isolation service from related app, now…"
+    magisk_module_install_system "$(find_latest "${ASSETS_DIR}" 'riru-storage-isolation-v*-release.zip')"
+  fi
 fi
 
 #adb_reboot system

@@ -20,7 +20,7 @@ APKS=(
 
   # web browsers
   # https://gitlab.com/divested-mobile/mull-fenix # https://f-droid.org/en/packages/us.spotco.fennec_dos/
-  "$(find_latest "${ASSETS_DIR}" 'us.spotco.fennec_dos_*.apk')"
+  #"$(find_latest "${ASSETS_DIR}" 'us.spotco.fennec_dos_*.apk')"
   "$(find_latest "${ASSETS_DIR}" 'com.stoutner.privacybrowser.standard_*.apk')"  # https://f-droid.org/en/packages/com.stoutner.privacybrowser.standard/
 
   # privacy
@@ -94,8 +94,6 @@ APKS=(
 
   # Navi
   "$(find_latest "${ASSETS_DIR}" 'gpsTest-v*.apk')"  # https://github.com/barbeau/gpstest
-  # https://gitlab.com/divested-mobile/maps # https://f-droid.org/en/packages/us.spotco.maps/
-  "$(find_latest "${ASSETS_DIR}" 'us.spotco.maps_*.apk')"
 
   # https://osmand.net/downloads # https://f-droid.org/en/packages/net.osmand.plus/
   "$(find_latest "${ASSETS_DIR}" 'net.osmand*.apk')"
@@ -104,9 +102,12 @@ APKS=(
 MAGISK_MODULES=(
   "$(find_latest "${ASSETS_DIR}" 'Busybox_for_Android_NDK-*.zip')"  # https://github.com/Magisk-Modules-Repo/busybox-ndk
   "$(find_latest "${ASSETS_DIR}" 'MagiskHidePropsConf-v*.zip')"  # https://github.com/Magisk-Modules-Repo/MagiskHidePropsConf
+  "$(find_latest "${ASSETS_DIR}" 'AuroraServices-v*-magisk-unity.zip')"  # https://gitlab.com/AuroraOSS/AuroraServices
+)
+
+[ -n "${ZYGISK}" ] || MAGISK_MODULES+=(
   "$(find_latest "${ASSETS_DIR}" 'riru-v*.zip')"  # https://github.com/RikkaApps/Riru
   "$(find_latest "${ASSETS_DIR}" 'riru-unshare-*.zip')"  # https://github.com/vvb2060/riru-unshare
-  "$(find_latest "${ASSETS_DIR}" 'AuroraServices-v*-magisk-unity.zip')"  # https://gitlab.com/AuroraOSS/AuroraServices
 )
 
 adb wait-for-usb-device
@@ -159,8 +160,10 @@ if [ "$(adb shell getprop ro.build.version.sdk)" -ge 26 ]; then
     #"$(find_latest "${ASSETS_DIR}" 'com.machiav3lli.backup_*.apk')"  # https://f-droid.org/en/packages/com.machiav3lli.backup/
   )
   MAGISK_MODULES+=(
-    "$(find_latest "${ASSETS_DIR}" 'sui-v*.zip')"  # https://github.com/RikkaApps/Sui
     #"$(find_latest "${ASSETS_DIR}" 'EdXposed-v*-master.zip')"  # https://github.com/ElderDrivers/EdXposed
+  )
+  [ -n "${ZYGISK}" ] || MAGISK_MODULES+=(
+    "$(find_latest "${ASSETS_DIR}" 'sui-v*.zip')"  # https://github.com/RikkaApps/Sui
   )
 else
   APKS+=(
@@ -170,20 +173,26 @@ else
 fi
 
 if [ "$(adb shell getprop ro.build.version.sdk)" -ge 27 ]; then
-  MAGISK_MODULES+=(
-    "$(find_latest "${ASSETS_DIR}" 'safetynet-fix-v2.1.*.zip')"  # https://github.com/kdrag0n/safetynet-fix
-    "$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-release.zip')"  # https://github.com/LSPosed/LSPosed
-  )
-  APKS+=(
-    "$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-release.apk')"  # https://github.com/LSPosed/LSPosed
-  )
+  if [ -n "${ZYGISK}" ]; then
+    MAGISK_MODULES+=(
+      "$(find_latest "${ASSETS_DIR}" 'safetynet-fix-v2.*.zip')"  # https://github.com/kdrag0n/safetynet-fix
+      "$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-zygisk-release.zip')"  # https://github.com/LSPosed/LSPosed
+    )
+    APKS+=("$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-zygisk-release.apk')")
+  else
+    MAGISK_MODULES+=(
+      "$(find_latest "${ASSETS_DIR}" 'safetynet-fix-v2.1.*.zip')"  # https://github.com/kdrag0n/safetynet-fix
+      "$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-riru-release.zip')"  # https://github.com/LSPosed/LSPosed
+    )
+    APKS+=("$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-riru-release.apk')")
+  fi
 fi
+
 if [ "$(adb shell getprop ro.build.version.sdk)" -ge 28 ]; then
-  APKS+=(
+  [ -z "${ZYGISK}" ] && APKS+=(
     #"$(find_latest "${ASSETS_DIR}" 'RnIntentClean-v*.apk')"  # https://github.com/TigerBeanst/RnIntentClean
     #"$(find_latest "${ASSETS_DIR}" 'com.jakting.shareclean_*.apk')"  # https://ic.into.icu/
-  )
-  MAGISK_MODULES+=(
+  ) && MAGISK_MODULES+=(
     "$(find_latest "${ASSETS_DIR}" 'riru-ifw-enhance-v*-release.zip')"  # https://github.com/Kr328/Riru-IFWEnhance
-  )
+  ) ||:
 fi

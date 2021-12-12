@@ -2,9 +2,10 @@ find_latest(){
   find "${1}" -type f -name "$(for i in $(find "${1}" -type f -name "${2}"); do echo ${i##*/}; done | sort -ur | head -n1)"
 }
 
-MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-v*.apk')"
-[ -n "${MAGISK_ZIP}" ] || MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-v*.zip')"
-MAGISK_MAN_APK="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-v*.apk')"
+#[ -n "${ZYGISK}" ] && MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-canary-*.apk')" || MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-v*.apk')"
+MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-canary-*.apk')"
+#MAGISK_MAN_APK="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-v*.apk')"
+MAGISK_MAN_APK="${MAGISK_ZIP}"
 [ -n "${MAGISK_MAN_APK}" ] || MAGISK_MAN_APK="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'MagiskManager-v*.zip')"
 
 adb_reboot(){
@@ -133,6 +134,8 @@ BLK_CNT="$((${BLK_CNT}-${CRYPTO_FOOTER_LEN}))"
 dd if=/dev/zero of="${BLK_DEV}" bs="${BLK_SIZE}" skip=${BLK_CNT} count="${CRYPTO_FOOTER_LEN}"
 make_ext4fs -l "$((${BLK_CNT}*${BLK_SIZE}))" -a /data "${BLK_DEV}" || mke2fs -t ext4 "${BLK_DEV}" "${BLK_CNT}"
 #mkfs.f2fs -w "${BLK_SIZE}" "${BLK_DEV}" "${BLK_CNT}"
+umount /sdcard ||:
+umount /data ||:
 exit
 EOF
   adb wait-for-usb-recovery
