@@ -18,11 +18,6 @@ APKS=(
   "$(find_latest "${ASSETS_DIR}" 'ObscuraCam-*-release.apk')"
   "$(find_latest "${ASSETS_DIR}" 'net.sourceforge.opencamera_*.apk')"  # https://f-droid.org/en/packages/net.sourceforge.opencamera/
 
-  # web browsers
-  # https://gitlab.com/divested-mobile/mull-fenix # https://f-droid.org/en/packages/us.spotco.fennec_dos/
-  #"$(find_latest "${ASSETS_DIR}" 'us.spotco.fennec_dos_*.apk')"
-  "$(find_latest "${ASSETS_DIR}" 'com.stoutner.privacybrowser.standard_*.apk')"  # https://f-droid.org/en/packages/com.stoutner.privacybrowser.standard/
-
   # privacy
   # https://github.com/M66B/XPrivacyLua
   "$(find_latest "${ASSETS_DIR}" 'eu.faircode.xlua_*.apk')"  # https://f-droid.org/en/packages/eu.faircode.xlua/
@@ -68,8 +63,9 @@ APKS=(
   "$(find_latest "${ASSETS_DIR}" 'dummydomain.yetanothercallblocker_*.apk')"
 
   # media
-  "$(find_latest "${ASSETS_DIR}" 'mpv-android-*.apk')"  # https://github.com/mpv-android/mpv-android
+  #"$(find_latest "${ASSETS_DIR}" 'mpv-android-*.apk')"  # https://github.com/mpv-android/mpv-android
   #"$(find_latest "${ASSETS_DIR}" 'is.xyz.mpv_*.apk')"  # https://f-droid.org/en/packages/is.xyz.mpv/
+  "$(find_latest "${ASSETS_DIR}" 'org.videolan.vlc_*.apk')"
 
   "$(find_latest "${ASSETS_DIR}" 'Twire-*.apk')"  # https://github.com/twireapp/Twire
   #"$(find_latest "${ASSETS_DIR}" 'com.perflyst.twire_*.apk')"  # https://f-droid.org/en/packages/com.perflyst.twire/
@@ -112,10 +108,16 @@ MAGISK_MODULES=(
 
 adb wait-for-usb-device
 
-# https://invizible.net/en/
-[ "$(adb shell getprop ro.product.cpu.abi)" != "arm64-v8a" ] || INVIZIBLE_ARCH="_arm64"
+[ "$(adb shell getprop ro.product.cpu.abi)" != "arm64-v8a" ] || CPU_ARCH="arm64"
 APKS+=(
-  "$(find_latest "${ASSETS_DIR}" "Invizible_*_ver.*${INVIZIBLE_ARCH}.apk")"  # https://github.com/Gedsh/InviZible
+  # https://librera.mobi/ # https://github.com/foobnix/LibreraReader # https://f-droid.org/en/packages/com.foobnix.pro.pdf.reader/
+  "$(find_latest "${ASSETS_DIR}" "Librera.Fdroid-*-uni.apk")"
+  #"$(find_latest "${ASSETS_DIR}" "Librera.Pro-*-uni.apk")"
+)
+
+# https://invizible.net/en/
+APKS+=(
+  "$(find_latest "${ASSETS_DIR}" "Invizible_*_ver.*${CPU_ARCH:+_${CPU_ARCH}}.apk")"  # https://github.com/Gedsh/InviZible
   #"$(find_latest "${ASSETS_DIR}" 'pan.alexander.tordnscrypt.stable_*.apk')"  # https://f-droid.org/packages/pan.alexander.tordnscrypt.stable/
 )
 

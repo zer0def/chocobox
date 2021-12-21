@@ -2,8 +2,8 @@ find_latest(){
   find "${1}" -type f -name "$(for i in $(find "${1}" -type f -name "${2}"); do echo ${i##*/}; done | sort -ur | head -n1)"
 }
 
-#[ -n "${ZYGISK}" ] && MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-canary-*.apk')" || MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-v*.apk')"
-MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-canary-*.apk')"
+[ -n "${ZYGISK}" ] && MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-canary-*.apk')" || MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-v*.apk')"
+#MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-canary-*.apk')"
 #MAGISK_MAN_APK="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-v*.apk')"
 MAGISK_MAN_APK="${MAGISK_ZIP}"
 [ -n "${MAGISK_MAN_APK}" ] || MAGISK_MAN_APK="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'MagiskManager-v*.zip')"
@@ -15,7 +15,7 @@ adb_reboot(){
 reboot_and_wait_for_recovery(){
   adb_reboot recovery; adb wait-for-usb-recovery
   # `adb shell` is a further synchronization primitive here, because splashscreens
-  adb shell; adb wait-for-usb-recovery
+  adb shell echo; adb wait-for-usb-recovery
 }
 
 preload_ota_cfg_common(){
@@ -56,17 +56,63 @@ Terminal
 WebViewStock
 
 (AEXPapers)
+(Camera)
 (CameraStock)
 (crDroidMusic)
 (DuckDuckGo)
 (EasterEgg)
+(GalleryGo)
+(GalleryGoPrebuilt)
+(GoogleCameraGo)
 (messaging)
 (MusicFX)
 (Phonograph)
 (Recorder)
 (ViaBrowser)
+(ViaPrebuilt)
 EOF
   adb push "${TMPFILE}" /tmp/install/.gapps-config || adb push "${TMPFILE}" /data/.gapps-config || adb push "${TMPFILE}" /sdcard/.gapps-config
+
+  # https://gitlab.com/Nanolx/NanoDroid/-/blob/master/doc/NanoDroidOverlay.md
+  cat <<EOF >"${TMPFILE}"
+CMAudioFX
+CMBugReport
+CMMusic
+CMUpdater
+
+LRecorder
+LUpdater
+
+BasicDreams
+Browser
+Email
+FMRadio
+MMS
+SoundRecorder
+Terminal
+WebViewStock
+
+AEXPapers
+AudioFX
+Camera
+CameraStock
+crDroidMusic
+DuckDuckGo
+EasterEgg
+GalleryGo
+GalleryGoPrebuilt
+GoogleCameraGo
+messaging
+MusicFX
+MusicPlayerGO
+Phonograph
+Recorder
+Stk
+ViaBrowser
+ViaPrebuilt
+webview
+EOF
+  adb push "${TMPFILE}" /tmp/.nanodroid-overlay || adb push "${TMPFILE}" /data/.nanodroid-overlay
 
   # NanoDroid: https://gitlab.com/Nanolx/NanoDroid/-/blob/master/doc/AlterInstallation.md
   cat <<EOF >"${TMPFILE}"
@@ -146,6 +192,7 @@ setup_encryption(){
   read -p "Settings -> Security -> Encryption and credentials -> Encrypt phone"
   read -p "Settings -> Security -> Screen lock -> Secure startup"
   adb wait-for-usb-device
+  reboot_and_wait_for_recovery
 }
 
 magisk_boot_patch(){
@@ -158,6 +205,12 @@ magisk_boot_patch(){
   [ -n "${MAGISK_BOOT_PATCH}" ] || "ota_pkg_${OTA_METHOD:-push}" "${MAGISK_ZIP}"
   [ -z "${MAGISK_BOOT_PATCH}" ] || (echo "cat ${BOOT_PART}" | adb shell >"${TMP_BOOT_IMG}")
   "ota_pkg_${OTA_METHOD:-push}" "${COMPLEMENT_ZIPS[@]}"
+
+  if [ -n "${WIPE_DATA}" ] && [ -n "${WIPE_DATA_FASTBOOT}" ]; then
+    adb reboot bootloader
+    sudo fastboot -w
+    sudo fastboot reboot
+  fi
 
   adb_reboot system; adb wait-for-usb-device  # relies on USB debug being pre-enabled, not always the case
   until adb install -r "${MAGISK_MAN_APK}"; do sleep 2; done

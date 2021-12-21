@@ -48,4 +48,4 @@ if [ "$(adb shell getprop ro.build.version.sdk)" -ge 23 ]; then
 fi
 
 #adb_reboot system
-echo 'This would be a good time to restart the device.'
+echo 'This would be a good time to enable Zygisk and restart the device as many times as necessary for Magisk and Xposed modules to work.'
