@@ -1,0 +1,6 @@
+certs
+data
+docker-compose.yml
+ejabberd.yml
+init.sh
+nginx.conf

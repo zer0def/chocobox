@@ -1,0 +1,83 @@
+commit 5fc63421e1a57396639e43cc1287bcf627db2ab9
+Author: zer0def <zer0def@zer0def.0>
+Date:   Fri Jan 14 06:51:11 2022 +0100
+
+    De-localhostify
+
+diff --git a/app.py b/app.py
+index b23ca9f4..ef3a00eb 100644
+--- a/app.py
++++ b/app.py
+@@ -52,6 +52,7 @@ from globals import globalvars
+ # Generate a Random UUID for Interprocess Handling
+ processUUID = str(uuid.uuid4())
+ globalvars.processUUID = processUUID
++globalvars.apiLocation = getattr(config, "ospCoreAPI", None) or "http://127.0.0.1"
+ 
+ ####### Sentry.IO Metrics and Error Logging (Disabled by Default) #######
+ if hasattr(config, 'sentryIO_Enabled') and hasattr(config, 'sentryIO_DSN'):
+@@ -77,8 +78,6 @@ if hasattr(config, 'sentryIO_Enabled') and hasattr(config, 'sentryIO_DSN'):
+             server_name=globalvars.processUUID
+         )
+ 
+-coreNginxRTMPAddress = "127.0.0.1"
+-
+ # Initialize RedisURL Variable
+ RedisURL = None
+ if config.redisPassword == '' or config.redisPassword is None:
+diff --git a/conf/config.py.dist b/conf/config.py.dist
+index 6da38b56..8092ed7e 100644
+--- a/conf/config.py.dist
++++ b/conf/config.py.dist
+@@ -39,4 +39,6 @@ ejabberdHost = "localhost"
+ # Sentry.io Debug Logging and Tracing
+ # sentryIO_Enabled = False
+ # sentryIO_DSN = "https://subdomain.ingest.sentry.io/0"
+-# sentryIO_Environment = "Dev"
+\ No newline at end of file
++# sentryIO_Environment = "Dev"
++
++ospCoreAPI = "http://127.0.0.1"
+diff --git a/functions/database.py b/functions/database.py
+index fc6b812d..2bbbe81a 100644
+--- a/functions/database.py
++++ b/functions/database.py
+@@ -139,7 +139,7 @@ def dbFixes():
+             role.default = False
+         db.session.commit()
+ 
+-    # Checks for local RTMP Server Authorization
++    # Checks for local RTMP Server Authorization (also should be forked into a proper RTMP server registration procedure)
+     rtmpServers = settings.rtmpServer.query.filter_by(address="127.0.0.1").first()
+     if rtmpServers is None:
+         localRTMP = settings.rtmpServer("127.0.0.1")
+diff --git a/functions/socketio/syst.py b/functions/socketio/syst.py
+index 552c8208..76a87515 100644
+--- a/functions/socketio/syst.py
++++ b/functions/socketio/syst.py
+@@ -196,7 +196,8 @@ def get_admin_component_status(msg):
+         status = "Failed"
+ 
+         if component == "osp_core":
+-            r = requests.get("http://127.0.0.1/apiv1/server/ping")
++            from globals.globalvars import apiLocation
++            r = requests.get("{}/apiv1/server/ping".format(apiLocation))
+             if r.status_code == 200:
+                 response = r.json()
+                 if 'results' in response:
+@@ -392,4 +393,4 @@ def set_global_panel_target(message):
+                 panelQuery.target = targetId
+             db.session.commit()
+             db.session.close()
+-    return 'OK'
+\ No newline at end of file
++    return 'OK'
+diff --git a/globals/globalvars.py b/globals/globalvars.py
+index 3a052ec6..e6c10ad0 100644
+--- a/globals/globalvars.py
++++ b/globals/globalvars.py
+@@ -42,3 +42,4 @@ ejabberdServerHttpBindFQDN = None
+ recaptchaEnabled = False
+ RECAPTCHA_PUBLIC_KEY = ''
+ RECAPTCHA_PRIVATE_KEY = ''
++apiLocation = "http://127.0.0.1"

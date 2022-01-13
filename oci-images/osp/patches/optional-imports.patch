@@ -1,0 +1,22 @@
+commit 511e6f57aca057839a0d038f486237450264dc28
+Author: zer0def <zer0def@zer0def.0>
+Date:   Fri Jan 7 11:49:12 2022 +0100
+
+    Make GitPython optional, as the rest of the script implies
+
+diff --git a/blueprints/settings.py b/blueprints/settings.py
+index 6f40e3ca..d0de0e92 100644
+--- a/blueprints/settings.py
++++ b/blueprints/settings.py
+@@ -5,7 +5,10 @@ import shutil
+ import uuid
+ import socket
+ import xmltodict
+-import git
++try:
++    import git
++except ImportError:
++    pass
+ import re
+ import psutil
+ import pytz

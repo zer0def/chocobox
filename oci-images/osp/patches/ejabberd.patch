@@ -1,0 +1,259 @@
+commit 28c8821bd412bd9dcc65792231ce048cfbe2d8b3
+Author: zer0def <zer0def@zer0def.0>
+Date:   Fri Jan 7 12:22:39 2022 +0100
+
+    Ejabberd fixes
+
+diff --git a/app.py b/app.py
+index 36ee0a75..b23ca9f4 100644
+--- a/app.py
++++ b/app.py
+@@ -319,7 +319,15 @@ if hasattr(config,'ejabberdServerHttpBindFQDN'):
+     globalvars.ejabberdServerHttpBindFQDN = config.ejabberdServerHttpBindFQDN
+ 
+ try:
+-    ejabberd = ejabberdctl(config.ejabberdHost, config.ejabberdAdmin, config.ejabberdPass, server=globalvars.ejabberdServer)
++    ejabberd = ejabberdctl(
++        config.ejabberdHost, config.ejabberdAdmin, config.ejabberdPass,
++        xmlrpc_uri="{}://{}:{}{}".format(
++            getattr(globalvars, "ejabberdXmlrpcProcotol", "http"),
++            globalvars.ejabberdServer,
++            getattr(globalvars, "ejabberdXmlrpcPort", 5280),
++            getattr(globalvars, "ejabberdXmlrpcPath", "/xmlrpc")
++        )
++    )
+     app.logger.info(ejabberd.status())
+ except Exception as e:
+     app.logger.error({"level": "error", "message": "ejabberdctl failed to load: " + str(e)})
+diff --git a/functions/ejabberdctl.py b/functions/ejabberdctl.py
+index 021dddb0..60b347d4 100644
+--- a/functions/ejabberdctl.py
++++ b/functions/ejabberdctl.py
+@@ -9,7 +9,7 @@ class ejabberdctl(object):
+     '''
+     def __init__(self,
+                  host, username, password,
+-                 protocol='http', server='127.0.0.1', port=4560,
++                 xmlrpc_uri='http://127.0.0.1:5280/xmlrpc',
+                  admin=True, verbose=False):
+         '''
+         Init XML-RPC server proxy.
+@@ -24,8 +24,7 @@ class ejabberdctl(object):
+             'bad_arg': 'ERROR: call failed, bad input argument',
+             'missing_arg': 'ERROR: call failed, missing input argument'
+             }
+-        uri = '{}://{}:{}'.format(protocol, server, port)
+-        self.xmlrpc_server = xmlrpc.client.ServerProxy(uri, verbose=verbose)
++        self.xmlrpc_server = xmlrpc.client.ServerProxy(xmlrpc_uri, verbose=verbose)
+ 
+     def ctl(self, command, payload=None):
+         '''
+diff --git a/installs/ejabberd/setup/ejabberd.yml b/installs/ejabberd/setup/ejabberd.yml
+index b7fe9d65..c74fd036 100644
+--- a/installs/ejabberd/setup/ejabberd.yml
++++ b/installs/ejabberd/setup/ejabberd.yml
+@@ -15,8 +15,8 @@
+ ###
+ 
+ hosts:
+-  - localhost
+-  - CHANGEME
++- localhost
++- CHANGEME
+ 
+ loglevel: info
+ 
+@@ -26,61 +26,45 @@ loglevel: info
+ #  - /etc/letsencrypt/live/domain.tld/privkey.pem
+ 
+ listen:
+-  -
+-    port: 5222
+-    ip: "::"
+-    module: ejabberd_c2s
+-    max_stanza_size: 262144
+-    shaper: c2s_shaper
+-    access: c2s
+-    starttls_required: true
+-  -
+-    port: 5269
+-    ip: "::"
+-    module: ejabberd_s2s_in
+-    max_stanza_size: 524288
+-  -
+-    port: 5443
+-    ip: "::FFFF:127.0.0.1"
+-    module: ejabberd_http
+-    tls: true
+-    request_handlers:
+-      /admin: ejabberd_web_admin
+-      /api: mod_http_api
+-      /bosh: mod_bosh
+-      /captcha: ejabberd_captcha
+-      /upload: mod_http_upload
+-      /ws: ejabberd_http_ws
+-  -
+-    port: 5280
+-    ip: "::FFFF:127.0.0.1"
+-    module: ejabberd_http
+-    request_handlers:
+-      /admin: ejabberd_web_admin
+-      /api: mod_http_api
+-      /bosh: mod_bosh
+-      /captcha: ejabberd_captcha
+-      /upload: mod_http_upload
+-      /ws: ejabberd_http_ws
+-      /.well-known/acme-challenge: ejabberd_acme
+-  -
+-    port: 3478
+-    transport: udp
+-    module: ejabberd_stun
+-    use_turn: true
+-  -
+-    port: 1883
+-    ip: "::"
+-    module: mod_mqtt
+-    backlog: 1000
+-  -
+-    port: 4560
+-    ip: "::FFFF:127.0.0.1"
+-    module: ejabberd_xmlrpc
+-    access_commands:
+-      admin:
+-        commands: all
+-        options: []
++- port: 5222
++  ip: "::"
++  module: ejabberd_c2s
++  max_stanza_size: 262144
++  shaper: c2s_shaper
++  access: c2s
++  starttls_required: true
++- port: 5269
++  ip: "::"
++  module: ejabberd_s2s_in
++  max_stanza_size: 524288
++- port: 5443
++  ip: "::FFFF:127.0.0.1"
++  module: ejabberd_http
++  tls: true
++  request_handlers:
++    /admin: ejabberd_web_admin
++    /api: mod_http_api
++    /bosh: mod_bosh
++    /captcha: ejabberd_captcha
++    /upload: mod_http_upload
++    /ws: ejabberd_http_ws
++    /xmlrpc: ejabberd_xmlrpc
++- port: 5280
++  ip: "::FFFF:127.0.0.1"
++  module: ejabberd_http
++  request_handlers:
++    /admin: ejabberd_web_admin
++    /api: mod_http_api
++    /bosh: mod_bosh
++    /captcha: ejabberd_captcha
++    /upload: mod_http_upload
++    /ws: ejabberd_http_ws
++    /.well-known/acme-challenge: ejabberd_acme
++    /xmlrpc: ejabberd_xmlrpc
++- port: 1883
++  ip: "::"
++  module: mod_mqtt
++  backlog: 1000
+ 
+ s2s_use_starttls: optional
+ 
+@@ -89,11 +73,11 @@ acl:
+     user_regexp: ""
+   loopback:
+     ip:
+-      - 127.0.0.0/8
+-      - ::1/128
++    - 127.0.0.0/8
++    - ::1/128
+   admin:
+-     user:
+-       - "admin@localhost"
++    user:
++    - "admin@localhost"
+ 
+ access_rules:
+   local:
+@@ -117,7 +101,7 @@ access_rules:
+ api_permissions:
+   "console commands":
+     from:
+-      - ejabberd_ctl
++    - ejabberd_ctl
+     who: all
+     what: "*"
+   "admin access":
+@@ -133,15 +117,15 @@ api_permissions:
+             acl: loopback
+             acl: admin
+     what:
+-      - "*"
+-      - "!stop"
+-      - "!start"
++    - "*"
++    - "!stop"
++    - "!start"
+   "public commands":
+     who:
+       ip: 127.0.0.1/8
+     what:
+-      - status
+-      - connected_users_number
++    - status
++    - connected_users_number
+ 
+ shaper:
+   normal:
+@@ -165,12 +149,12 @@ extauth_program: "/usr/bin/python3 /usr/local/ejabberd/conf/auth_osp.py"
+ extauth_instances: 3
+ 
+ host_config:
+-   "CHANGEME":
+-     auth_method:
+-       - external
+-       - anonymous
+-     allow_multiple_connections: true
+-     anonymous_protocol: login_anon
++  "CHANGEME":
++    auth_method:
++    - external
++    - anonymous
++    allow_multiple_connections: true
++    anonymous_protocol: login_anon
+ 
+ 
+ modules:
+@@ -201,13 +185,13 @@ modules:
+   mod_mqtt: {}
+   mod_muc:
+     access:
+-      - allow
++    - allow
+     access_admin:
+-      - allow: admin
++    - allow: admin
+     access_create: muc_create
+     access_persistent: muc_create
+     access_mam:
+-      - allow
++    - allow
+     default_room_options:
+       mam: true
+       persistent: true
+@@ -233,8 +217,8 @@ modules:
+   mod_pubsub:
+     access_createnode: pubsub_createnode
+     plugins:
+-      - flat
+-      - pep
++    - flat
++    - pep
+     force_node_config:
+       ## Avoid buggy clients to make their bookmarks public
+       storage:bookmarks:

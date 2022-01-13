@@ -1,0 +1,201 @@
+version: '3.4'
+services:
+  db:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    expose:
+    - 6379
+
+  ejabberd:
+    image: ejabberd/ecs:21.12
+    restart: unless-stopped
+    expose:
+    - 5222
+    volumes:
+    - "./auth_osp.sh:/auth_osp.sh:ro"
+    - "./ejabberd.yml:/home/ejabberd/conf/ejabberd.yml:ro"
+    environment:
+      OSPCOREAPI: "http://core:5000"
+      # when external auth is enabled, registration for any host other than "localhost" times out
+      CTL_ON_CREATE: "register ${EJABBERDADMIN} ${EJABBERDHOST} ${EJABBERDPASS}"
+
+  smtp:
+    image: munkyboy/fakesmtp
+    restart: unless-stopped
+    ports:
+    - "2525:25"
+    #volumes:
+    #- "./data/smtp:/var/mail"
+
+  nginx:
+    image: zer0def/nginx-rtmp:v1.3.2
+    build:
+      context: nginx
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+    - "1935:1935"
+    volumes:
+    - "./data:/var/www"
+    - "./nginx.conf:/etc/nginx/nginx.conf.template:ro"
+    #- "./certs:/certs:ro"
+    depends_on:
+    - rtmp
+    #tmpfs:
+    #- /tmp
+
+  db-init:
+    image: zer0def/osp:${GIT_REF}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${GIT_REF}
+    restart: "no"
+    command:
+    - "/bin/sh"
+    - "-xc"
+    - |
+      . /common.sh
+      wait_for_ejabberd
+      wait_for_db
+      python manage.py db init
+      python manage.py db migrate
+      python manage.py db upgrade
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db/${DB_NAME}
+      FLASK_SECRET: ${APP_SECRET}
+      FLASK_SALT: ${APP_SALT}
+      EJABBERDSERVER: ejabberd  # internal (external, if no FQDN specified)
+      EJABBERDHTTPBINDFQDN: nginx  # externally facing
+      EJABBERDADMIN: "${EJABBERDADMIN}"
+      EJABBERDHOST: "${EJABBERDHOST}"
+      EJABBERDPASS: "${EJABBERDPASS}"
+    #  OSP_ALLOWREGISTRATION: True
+    #  OSP_REQUIREVERIFICATION: True
+    #  TZ: ETC/UTC
+      OSP_ADMIN_USER: ${ADMIN_USER}
+      OSP_ADMIN_PASSWORD: ${ADMIN_PASS}
+      OSP_ADMIN_EMAIL: ${ADMIN_EMAIL}
+      OSP_SERVER_NAME: core
+      OSP_SERVER_ADDRESS: core
+      OSP_SMTP_SEND_AS: ${SMTP_SEND_AS}
+      OSP_SMTP_SERVER: smtp
+      OSP_SMTP_PORT: 25
+      OSP_CORE_UI_DEBUG: "${OSP_DEBUG}"
+      OSPCOREAPI: "http://core:5000"
+    depends_on:
+    - db
+    - ejabberd
+    - redis
+    volumes:
+    - "./init.sh:/init.sh:ro"
+
+  core:
+    image: zer0def/osp:${GIT_REF}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${GIT_REF}
+    command: ["gunicorn", "app:app", "-k", "geventwebsocket.gunicorn.workers.GeventWebSocketWorker", "-w", "16", "--bind", "0.0.0.0:5000", "--access-logfile", "-", "--error-logfile", "-"]
+    restart: unless-stopped
+    ports:
+    - '8585:80'
+    - '8553:443'
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      #REDIS_PASSWORD: ""
+      DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db/${DB_NAME}
+      FLASK_SECRET: ${APP_SECRET}
+      FLASK_SALT: ${APP_SALT}
+      EJABBERDSERVER: ejabberd  # internal (external, if no FQDN specified)
+      EJABBERDHTTPBINDFQDN: nginx  # externally facing
+      EJABBERDADMIN: "${EJABBERDADMIN}"
+      EJABBERDHOST: "${EJABBERDHOST}"
+      EJABBERDPASS: "${EJABBERDPASS}"
+      OSP_CORE_UI_DEBUG: "${OSP_DEBUG}"
+    #  TZ: ETC/UTC
+    #  OSP_ALLOWREGISTRATION: True
+    #  OSP_REQUIREVERIFICATION: True
+    volumes:
+    - "./data:/var/www"
+    depends_on:
+    - db-init
+    - smtp
+
+  init:
+    image: zer0def/osp:${GIT_REF}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${GIT_REF}
+    restart: "no"
+    command: ["/bin/sh", "/init.sh"]
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db/${DB_NAME}
+      FLASK_SECRET: ${APP_SECRET}
+      FLASK_SALT: ${APP_SALT}
+      EJABBERDSERVER: ejabberd  # internal (external, if no FQDN specified)
+      EJABBERDHTTPBINDFQDN: nginx  # externally facing
+      EJABBERDADMIN: "${EJABBERDADMIN}"
+      EJABBERDHOST: "${EJABBERDHOST}"
+      EJABBERDPASS: "${EJABBERDPASS}"
+      OSP_CORE_UI_DEBUG: "${OSP_DEBUG}"
+    #  OSP_ALLOWREGISTRATION: True
+    #  OSP_REQUIREVERIFICATION: True
+    #  TZ: ETC/UTC
+      OSP_ADMIN_USER: ${ADMIN_USER}
+      OSP_ADMIN_PASSWORD: ${ADMIN_PASS}
+      OSP_ADMIN_EMAIL: ${ADMIN_EMAIL}
+      OSP_SERVER_NAME: core
+      OSP_SERVER_ADDRESS: core
+      OSP_SMTP_SEND_AS: ${SMTP_SEND_AS}
+      OSP_SMTP_SERVER: smtp
+      OSP_SMTP_PORT: 25
+      OSPCOREAPI: "http://core:5000"
+    depends_on:
+    - core
+    volumes:
+    - "./init.sh:/init.sh:ro"
+
+  rtmp:
+    image: zer0def/osp:${GIT_REF}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${GIT_REF}
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-x", "/rtmp.sh"]  # entrypoint override requires new command spec, so f-that
+    working_dir: /opt/osp/installs/osp-rtmp
+    environment:
+      FLASK_SECRET: ${APP_SECRET}
+      OSPCOREAPI: "http://core:5000"
+      OSP_CORE_UI_DEBUG: "${OSP_DEBUG}"
+      OSP_ADMIN_PASSWORD: ${ADMIN_PASS}
+      OSP_ADMIN_EMAIL: ${ADMIN_EMAIL}
+    depends_on:
+    #- core
+    - init
+    volumes:
+    - "./rtmp.sh:/rtmp.sh:ro"
+
+  #celery:
+  #celerybeat:

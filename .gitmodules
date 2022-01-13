@@ -1,0 +1,3 @@
+[submodule "osp-nginx-rtmp"]
+	path = oci-images/osp/nginx
+	url = https://github.com/zer0def/docker-nginx-rtmp

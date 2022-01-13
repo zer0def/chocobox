@@ -1,0 +1,239 @@
+commit 9cd69d133b2da46a13906f65d0283380c09fb3e8
+Author: zer0def <zer0def@zer0def.0>
+Date:   Fri Jan 7 08:56:47 2022 +0100
+
+    Migrate restplus to restx
+
+diff --git a/blueprints/apis/channel_ns.py b/blueprints/apis/channel_ns.py
+index cda713c8..b888863c 100644
+--- a/blueprints/apis/channel_ns.py
++++ b/blueprints/apis/channel_ns.py
+@@ -1,4 +1,4 @@
+-from flask_restplus import Api, Resource, reqparse, Namespace
++from flask_restx import Api, Resource, reqparse, Namespace
+ from flask import request
+ 
+ import uuid
+@@ -399,4 +399,4 @@ class api_1_SearchChannels(Resource):
+             returnArray = cachedDbCalls.searchChannels(args['term'])
+             return {'results': returnArray}
+         else:
+-            return {'results': {'message': 'Request Error'}}, 400
+\ No newline at end of file
++            return {'results': {'message': 'Request Error'}}, 400
+diff --git a/blueprints/apis/clip_ns.py b/blueprints/apis/clip_ns.py
+index cc38bfc5..3c8c7b4f 100644
+--- a/blueprints/apis/clip_ns.py
++++ b/blueprints/apis/clip_ns.py
+@@ -1,4 +1,4 @@
+-from flask_restplus import Api, Resource, reqparse, Namespace
++from flask_restx import Api, Resource, reqparse, Namespace
+ from flask import request
+ from os import path, remove
+ 
+@@ -100,4 +100,4 @@ class api_1_SearchClips(Resource):
+             returnArray = cachedDbCalls.searchClips(args['term'])
+             return {'results': returnArray}
+         else:
+-            return {'results': {'message': 'Request Error'}}, 400
+\ No newline at end of file
++            return {'results': {'message': 'Request Error'}}, 400
+diff --git a/blueprints/apis/rtmp_ns.py b/blueprints/apis/rtmp_ns.py
+index 87912e46..a07d6064 100644
+--- a/blueprints/apis/rtmp_ns.py
++++ b/blueprints/apis/rtmp_ns.py
+@@ -1,4 +1,4 @@
+-from flask_restplus import Api, Resource, reqparse, Namespace
++from flask_restx import Api, Resource, reqparse, Namespace
+ from flask import request
+ import datetime
+ import socket
+@@ -260,4 +260,4 @@ class api_1_rtmp_playbackauth(Resource):
+                                         db.session.close()
+                                         return {'results': True}, 200
+         db.session.close()
+-        return {'results': False}, 400
+\ No newline at end of file
++        return {'results': False}, 400
+diff --git a/blueprints/apis/server_ns.py b/blueprints/apis/server_ns.py
+index fcd61637..b989d5a5 100644
+--- a/blueprints/apis/server_ns.py
++++ b/blueprints/apis/server_ns.py
+@@ -1,6 +1,6 @@
+ import datetime
+ 
+-from flask_restplus import Api, Resource, reqparse, Namespace
++from flask_restx import Api, Resource, reqparse, Namespace
+ 
+ from classes import settings
+ from classes.shared import db
+@@ -52,4 +52,4 @@ class api_1_Ping(Resource):
+         """
+             Returns a Server Pong
+         """
+-        return {'results': {'message': 'Pong', 'timestamp': str(datetime.datetime.now())}}
+\ No newline at end of file
++        return {'results': {'message': 'Pong', 'timestamp': str(datetime.datetime.now())}}
+diff --git a/blueprints/apis/stream_ns.py b/blueprints/apis/stream_ns.py
+index 0602cc4a..179d5a60 100644
+--- a/blueprints/apis/stream_ns.py
++++ b/blueprints/apis/stream_ns.py
+@@ -1,4 +1,4 @@
+-from flask_restplus import Api, Resource, reqparse, Namespace
++from flask_restx import Api, Resource, reqparse, Namespace
+ from flask import request
+ 
+ from classes import Stream
+@@ -82,4 +82,4 @@ class api_1_SearchStreams(Resource):
+             returnArray = cachedDbCalls.searchStreams(args['term'])
+             return {'results': returnArray}
+         else:
+-            return {'results': {'message': 'Request Error'}}, 400
+\ No newline at end of file
++            return {'results': {'message': 'Request Error'}}, 400
+diff --git a/blueprints/apis/topic_ns.py b/blueprints/apis/topic_ns.py
+index 06a5d1d9..2d404df5 100644
+--- a/blueprints/apis/topic_ns.py
++++ b/blueprints/apis/topic_ns.py
+@@ -1,4 +1,4 @@
+-from flask_restplus import Api, Resource, reqparse, Namespace
++from flask_restx import Api, Resource, reqparse, Namespace
+ 
+ from classes import topics
+ from classes.shared import db
+@@ -48,4 +48,4 @@ class api_1_SearchTopics(Resource):
+             returnArray = cachedDbCalls.searchTopics(args['term'])
+             return {'results': returnArray}
+         else:
+-            return {'results': {'message': 'Request Error'}}, 400
+\ No newline at end of file
++            return {'results': {'message': 'Request Error'}}, 400
+diff --git a/blueprints/apis/user_ns.py b/blueprints/apis/user_ns.py
+index 2dfe14b8..12a3e3c6 100644
+--- a/blueprints/apis/user_ns.py
++++ b/blueprints/apis/user_ns.py
+@@ -1,4 +1,4 @@
+-from flask_restplus import Api, Resource, reqparse, Namespace
++from flask_restx import Api, Resource, reqparse, Namespace
+ from flask_security.utils import hash_password
+ from flask import request
+ import datetime
+@@ -227,4 +227,4 @@ class api_1_SearchUsers(Resource):
+             returnArray = cachedDbCalls.searchUsers(args['term'])
+             return {'results': returnArray}
+         else:
+-            return {'results': {'message': 'Request Error'}}, 400
+\ No newline at end of file
++            return {'results': {'message': 'Request Error'}}, 400
+diff --git a/blueprints/apis/video_ns.py b/blueprints/apis/video_ns.py
+index 40d09970..877d2241 100644
+--- a/blueprints/apis/video_ns.py
++++ b/blueprints/apis/video_ns.py
+@@ -1,4 +1,4 @@
+-from flask_restplus import Api, Resource, reqparse, Namespace
++from flask_restx import Api, Resource, reqparse, Namespace
+ from flask import request
+ from os import path, remove
+ 
+@@ -105,4 +105,4 @@ class api_1_SearchVideos(Resource):
+             returnArray = cachedDbCalls.searchVideos(args['term'])
+             return {'results': returnArray}
+         else:
+-            return {'results': {'message': 'Request Error'}}, 400
+\ No newline at end of file
++            return {'results': {'message': 'Request Error'}}, 400
+diff --git a/blueprints/apis/xmpp_ns.py b/blueprints/apis/xmpp_ns.py
+index 9288ee89..a5f246cf 100644
+--- a/blueprints/apis/xmpp_ns.py
++++ b/blueprints/apis/xmpp_ns.py
+@@ -1,4 +1,4 @@
+-from flask_restplus import Api, Resource, reqparse, Namespace
++from flask_restx import Api, Resource, reqparse, Namespace
+ 
+ from classes import settings
+ from classes import Sec
+@@ -57,4 +57,4 @@ class api_1_xmppisuser(Resource):
+                 userQuery = Sec.User.query.filter_by(uuid=username).first()
+                 if userQuery != None:
+                     return {'results': {'message': 'Successful Authentication', 'code': 200}}, 200
+-        return {'results': {'message': 'Request Error', 'code':400}}, 400
+\ No newline at end of file
++        return {'results': {'message': 'Request Error', 'code':400}}, 400
+diff --git a/blueprints/apiv1.py b/blueprints/apiv1.py
+index 56c357a1..8c31a565 100644
+--- a/blueprints/apiv1.py
++++ b/blueprints/apiv1.py
+@@ -3,7 +3,7 @@ from os import path, remove
+ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+ 
+ from flask import Blueprint, url_for
+-from flask_restplus import Api, Resource, reqparse
++from flask_restx import Api, Resource, reqparse
+ 
+ 
+ from .apis.server_ns import api as serverNS
+diff --git a/installs/osp-rtmp/blueprints/api.py b/installs/osp-rtmp/blueprints/api.py
+index 802d363c..d949a229 100644
+--- a/installs/osp-rtmp/blueprints/api.py
++++ b/installs/osp-rtmp/blueprints/api.py
+@@ -3,7 +3,7 @@ from os import path, remove
+ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+ 
+ from flask import Blueprint, url_for
+-from flask_restplus import Api, Resource, reqparse
++from flask_restx import Api, Resource, reqparse
+ 
+ from .apis.server_ns import api as serverNS
+ 
+diff --git a/installs/osp-rtmp/blueprints/apis/server_ns.py b/installs/osp-rtmp/blueprints/apis/server_ns.py
+index db136774..a1370cd2 100644
+--- a/installs/osp-rtmp/blueprints/apis/server_ns.py
++++ b/installs/osp-rtmp/blueprints/apis/server_ns.py
+@@ -1,6 +1,6 @@
+ import datetime
+ 
+-from flask_restplus import Api, Resource, reqparse, Namespace
++from flask_restx import Api, Resource, reqparse, Namespace
+ 
+ api = Namespace('server', description='Server Related Queries and Functions')
+ 
+@@ -11,4 +11,4 @@ class api_1_ping(Resource):
+         """
+             Displays basic ping/pong response
+         """
+-        return {'results': { "message": "pong" } }
+\ No newline at end of file
++        return {'results': { "message": "pong" } }
+diff --git a/installs/osp-rtmp/setup/requirements.txt b/installs/osp-rtmp/setup/requirements.txt
+index 83c09551..03f16228 100644
+--- a/installs/osp-rtmp/setup/requirements.txt
++++ b/installs/osp-rtmp/setup/requirements.txt
+@@ -6,7 +6,7 @@ Flask-BabelEx==0.9.3
+ Flask-Mail==0.9.1
+ Flask-Migrate==2.5.2
+ Flask-Principal==0.4.0
+-flask-restplus==0.12.1
++flask-restx==0.5.1
+ Flask-Script==2.0.6
+ Flask-WTF==0.14.3
+ gevent==20.9.0
+diff --git a/setup/requirements.txt b/setup/requirements.txt
+index 1535ee62..ca74bb30 100644
+--- a/setup/requirements.txt
++++ b/setup/requirements.txt
+@@ -7,7 +7,7 @@ Flask-Login==0.4.1
+ Flask-Mail==0.9.1
+ Flask-Migrate==2.5.2
+ Flask-Principal==0.4.0
+-flask-restplus==0.13.0
++flask-restx==0.5.1
+ Flask-Script==2.0.6
+ Flask-Security-Too==4.1.2
+ Flask-SocketIO==4.3.0
+@@ -53,4 +53,4 @@ bleach==3.3.0
+ pyqrcode==1.2.1
+ sentry-sdk==1.5.0
+ celery==5.1.2
+-ffmpeg-python==0.2.0
+\ No newline at end of file
++ffmpeg-python==0.2.0
