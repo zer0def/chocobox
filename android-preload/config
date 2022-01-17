@@ -101,7 +101,7 @@ MAGISK_MODULES=(
   "$(find_latest "${ASSETS_DIR}" 'AuroraServices-v*-magisk-unity.zip')"  # https://gitlab.com/AuroraOSS/AuroraServices
 )
 
-[ -n "${ZYGISK}" ] || MAGISK_MODULES+=(
+[ -n "${ZYGISK}" ] && MAGISK_MODULES+=("$(find_latest "${ASSETS_DIR}" 'Shamiko-v*-release.zip')") || MAGISK_MODULES+=(
   "$(find_latest "${ASSETS_DIR}" 'riru-v*.zip')"  # https://github.com/RikkaApps/Riru
   "$(find_latest "${ASSETS_DIR}" 'riru-unshare-*.zip')"  # https://github.com/vvb2060/riru-unshare
 )
