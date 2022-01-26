@@ -2,8 +2,7 @@ find_latest(){
   find "${1}" -type f -name "$(for i in $(find "${1}" -type f -name "${2}"); do echo ${i##*/}; done | sort -ur | head -n1)"
 }
 
-[ -n "${ZYGISK}" ] && MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-canary-*.apk')" || MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-v*.apk')"
-#MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-canary-*.apk')"
+MAGISK_ZIP="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-v*.apk')"
 #MAGISK_MAN_APK="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'Magisk-v*.apk')"
 MAGISK_MAN_APK="${MAGISK_ZIP}"
 [ -n "${MAGISK_MAN_APK}" ] || MAGISK_MAN_APK="$(find_latest "${ASSETS_DIR:-${MYDIR:-${PWD}}}" 'MagiskManager-v*.zip')"
@@ -116,17 +115,21 @@ EOF
 
   # NanoDroid: https://gitlab.com/Nanolx/NanoDroid/-/blob/master/doc/AlterInstallation.md
   cat <<EOF >"${TMPFILE}"
-nanodroid_microg=${MICROG:-1}
+nanodroid_microg=0
 #nanodroid_nlpbackend=1111
-nanodroid_nlpbackend=1101
-nanodroid_mapsv1=1
-#nanodroid_play=21
-nanodroid_play=${MICROG:-1}0
-#nanodroid_fdroid=3
-nanodroid_fdroid=1
+#nanodroid_nlpbackend=1101
+nanodroid_nlpbackend=0000
+#nanodroid_mapsv1=1
+nanodroid_mapsv1=0
+#nanodroid_play=30
+nanodroid_play=20
+nanodroid_fdroid=2
 nanodroid_apps=0
 nanodroid_overlay=1
 nanodroid_bash=0
+nanodroid_init="10_sqlite 20_fstrim 50_logscleaner"
+nanodroid_gsync=0
+nanodroid_swipe=0
 EOF
   adb push "${TMPFILE}" /tmp/.nanodroid-setup || adb push "${TMPFILE}" /data/.nanodroid-setup
 

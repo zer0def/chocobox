@@ -1,16 +1,10 @@
 COMPLEMENT_ZIPS=(
   "$(find_latest "${MYDIR}" 'NanoDroid-BromiteWebView-*.zip')"
   #"$(find_latest "${MYDIR}" 'NanoDroid-OsmAnd-*.zip')"
-)
+  "$(find_latest "${MYDIR}" 'NanoDroid-full-*.zip')"
 
-if [ "${MICROG:-1}" -eq 1 ]; then
-  COMPLEMENT_ZIPS+=(
-    "$(find_latest "${MYDIR}" 'NanoDroid-fdroid-*.zip')"
-    "$(find_latest "${MYDIR}" 'NanoDroid-patcher-*.zip')"
-    "$(find_latest "${MYDIR}" 'NanoDroid-microG-*.zip')"
-  )
-else
-  COMPLEMENT_ZIPS+=(
-    "$(find_latest "${MYDIR}" 'NanoDroid-full-*.zip')"
-  )
-fi
+  # https://github.com/FriendlyNeighborhoodShane/MinMicroG
+  #"$(find_latest "${MYDIR}" 'MinMicroG-NoGoolag-*.zip')"
+  #"$(find_latest "${MYDIR}" 'MinMicroG-MinimalIAP-*.zip')"
+  "$(find_latest "${MYDIR}" 'MinMicroG-Standard-*.zip')"
+)

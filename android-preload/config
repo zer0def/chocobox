@@ -33,7 +33,7 @@ APKS=(
   # https://auroraoss.com/
   "$(find_latest "${ASSETS_DIR}" 'AuroraStore_*.apk')"  # https://gitlab.com/AuroraOSS/AuroraStore
   #"$(find_latest "${ASSETS_DIR}" 'com.aurora.store_*.apk')"  # https://f-droid.org/en/packages/com.aurora.store/
-  "$(find_latest "${ASSETS_DIR}" 'AuroraServices_v*.apk')"  # https://gitlab.com/AuroraOSS/AuroraServices
+  #"$(find_latest "${ASSETS_DIR}" 'AuroraServices_v*.apk')"  # https://gitlab.com/AuroraOSS/AuroraServices
 
   # comms
   # Encrypted texting # https://silence.im/ # https://git.silence.dev/Silence/Silence-Android/
@@ -65,7 +65,6 @@ APKS=(
   # media
   #"$(find_latest "${ASSETS_DIR}" 'mpv-android-*.apk')"  # https://github.com/mpv-android/mpv-android
   #"$(find_latest "${ASSETS_DIR}" 'is.xyz.mpv_*.apk')"  # https://f-droid.org/en/packages/is.xyz.mpv/
-  "$(find_latest "${ASSETS_DIR}" 'org.videolan.vlc_*.apk')"
 
   "$(find_latest "${ASSETS_DIR}" 'Twire-*.apk')"  # https://github.com/twireapp/Twire
   #"$(find_latest "${ASSETS_DIR}" 'com.perflyst.twire_*.apk')"  # https://f-droid.org/en/packages/com.perflyst.twire/
@@ -101,18 +100,22 @@ MAGISK_MODULES=(
   "$(find_latest "${ASSETS_DIR}" 'AuroraServices-v*-magisk-unity.zip')"  # https://gitlab.com/AuroraOSS/AuroraServices
 )
 
-[ -n "${ZYGISK}" ] && MAGISK_MODULES+=("$(find_latest "${ASSETS_DIR}" 'Shamiko-v*-release.zip')") || MAGISK_MODULES+=(
+[ -n "${RIRU}" ] && MAGISK_MODULES+=(
   "$(find_latest "${ASSETS_DIR}" 'riru-v*.zip')"  # https://github.com/RikkaApps/Riru
   "$(find_latest "${ASSETS_DIR}" 'riru-unshare-*.zip')"  # https://github.com/vvb2060/riru-unshare
-)
+) || MAGISK_MODULES+=("$(find_latest "${ASSETS_DIR}" 'Shamiko-v*-release.zip')")
 
 adb wait-for-usb-device
 
 [ "$(adb shell getprop ro.product.cpu.abi)" != "arm64-v8a" ] || CPU_ARCH="arm64"
 APKS+=(
+  # http://get.videolan.org/vlc-android/
+  "$(find_latest "${ASSETS_DIR}" "VLC-Android-*-$(adb shell getprop ro.product.cpu.abi).apk")"
+  #"$(find_latest "${ASSETS_DIR}" 'org.videolan.vlc_*.apk')"
+
   # https://librera.mobi/ # https://github.com/foobnix/LibreraReader # https://f-droid.org/en/packages/com.foobnix.pro.pdf.reader/
-  "$(find_latest "${ASSETS_DIR}" "Librera.Fdroid-*-uni.apk")"
-  #"$(find_latest "${ASSETS_DIR}" "Librera.Pro-*-uni.apk")"
+  #"$(find_latest "${ASSETS_DIR}" "Librera.Fdroid-*-uni.apk")"
+  "$(find_latest "${ASSETS_DIR}" "Librera.Pro-*-uni.apk")"
 )
 
 # https://invizible.net/en/
@@ -135,13 +138,21 @@ APKS+=(
 
 if [ "${MICROG:-1}" -eq 1 ]; then
   APKS+=(
-    "$(find_latest "${ASSETS_DIR}" 'microG_GmsCore-v*.apk')"  # https://github.com/microg/GmsCore
-#    "$(find_latest "${ASSETS_DIR}" 'microG_Installer_Revived_GmsCore-Revived_*.apk')"
-#    "$(find_latest "${ASSETS_DIR}" 'FakeGApps-*.apk')"  # https://github.com/whew-inc/FakeGApps
+#    "$(find_latest "${ASSETS_DIR}" 'microG_GmsCore-v*.apk')"  # https://github.com/microg/GmsCore
+    "$(find_latest "${ASSETS_DIR}" 'FakeGApps-logfix.apk')"  # https://github.com/whew-inc/FakeGApps
   )
-#  MAGISK_MODULES+=(
-#    "$(find_latest "${ASSETS_DIR}" 'microG_Installer_Revived-Revived_*.zip')"  # https://github.com/nift4/microg_installer_revived
-#  )
+  MAGISK_MODULES+=(
+#    "$(find_latest "${ASSETS_DIR}" 'microG_Installer_Revived-*.zip')"  # https://github.com/nift4/microg_installer_revived
+
+    # https://github.com/FriendlyNeighborhoodShane/MinMicroG
+#    "$(find_latest "${ASSETS_DIR}" 'MinMicroG-NoGoolag-*.zip')"
+#    "$(find_latest "${ASSETS_DIR}" 'MinMicroG-MinimalIAP-*.zip')"
+#    "$(find_latest "${ASSETS_DIR}" 'MinMicroG-Standard-*.zip')"
+  )
+else
+  APKS+=(
+    "$(find_latest "${ASSETS_DIR}" 'yasnac-v*.r*-release.apk')"  # https://github.com/RikkaW/YASNAC
+  )
 fi
 
 if [ "$(adb shell getprop ro.build.version.sdk)" -ge 21 -a "$(adb shell getprop ro.build.version.sdk)" -lt 27 ]; then
@@ -164,7 +175,7 @@ if [ "$(adb shell getprop ro.build.version.sdk)" -ge 26 ]; then
   MAGISK_MODULES+=(
     #"$(find_latest "${ASSETS_DIR}" 'EdXposed-v*-master.zip')"  # https://github.com/ElderDrivers/EdXposed
   )
-  [ -n "${ZYGISK}" ] || MAGISK_MODULES+=(
+  [ -z "${RIRU}" ] || MAGISK_MODULES+=(
     "$(find_latest "${ASSETS_DIR}" 'sui-v*.zip')"  # https://github.com/RikkaApps/Sui
   )
 else
@@ -175,26 +186,32 @@ else
 fi
 
 if [ "$(adb shell getprop ro.build.version.sdk)" -ge 27 ]; then
-  if [ -n "${ZYGISK}" ]; then
+  if [ -z "${RIRU}" ]; then
     MAGISK_MODULES+=(
       "$(find_latest "${ASSETS_DIR}" 'safetynet-fix-v2.*.zip')"  # https://github.com/kdrag0n/safetynet-fix
       "$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-zygisk-release.zip')"  # https://github.com/LSPosed/LSPosed
     )
-    APKS+=("$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-zygisk-release.apk')")
   else
     MAGISK_MODULES+=(
       "$(find_latest "${ASSETS_DIR}" 'safetynet-fix-v2.1.*.zip')"  # https://github.com/kdrag0n/safetynet-fix
       "$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-riru-release.zip')"  # https://github.com/LSPosed/LSPosed
     )
-    APKS+=("$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-riru-release.apk')")
   fi
+  APKS+=("$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-release.apk')")
 fi
 
 if [ "$(adb shell getprop ro.build.version.sdk)" -ge 28 ]; then
-  [ -z "${ZYGISK}" ] && APKS+=(
-    #"$(find_latest "${ASSETS_DIR}" 'RnIntentClean-v*.apk')"  # https://github.com/TigerBeanst/RnIntentClean
+  APKS+=(
+    "$(find_latest "${ASSETS_DIR}" 'RnIntentClean-v*.apk')"  # https://github.com/TigerBeanst/RnIntentClean
     #"$(find_latest "${ASSETS_DIR}" 'com.jakting.shareclean_*.apk')"  # https://ic.into.icu/
-  ) && MAGISK_MODULES+=(
-    "$(find_latest "${ASSETS_DIR}" 'riru-ifw-enhance-v*-release.zip')"  # https://github.com/Kr328/Riru-IFWEnhance
-  ) ||:
+  )
+
+  # https://github.com/Kr328/Riru-IFWEnhance
+  [ -n "${RIRU}" ] && MAGISK_MODULES+=(
+    #"$(find_latest "${ASSETS_DIR}" 'ifw-enhance-v*-riru.zip')"
+    "$(find_latest "${ASSETS_DIR}" 'riru-ifw-enhance-v*.zip')"
+  ) || MAGISK_MODULES+=(
+    #"$(find_latest "${ASSETS_DIR}" 'ifw-enhance-v*-zygisk.zip')"
+    "$(find_latest "${ASSETS_DIR}" 'zygisk-ifw-enhance-v*.zip')"
+  )
 fi

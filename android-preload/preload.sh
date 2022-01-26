@@ -12,11 +12,6 @@ ASSETS_DIR="${ASSETS_DIR:-${MYDIR}}"
 adb wait-for-usb-device; until adb install -r "${MAGISK_MAN_APK}"; do sleep 2; done  # improvised spinlock
 until adb shell su -c echo; do sleep 2; done
 
-if [ "${MICROG:-1}" -eq 1 ]; then
-  #adb shell su -c pm grant com.android.vending android.permission.FAKE_PACKAGE_SIGNATURE
-  adb shell su -c npem
-fi
-
 . "${MYDIR}/config"
 [ -f "${MYDIR}/override" ] && . "${MYDIR}/override"
 
@@ -40,11 +35,17 @@ for i in "${APKS[@]}"; do adb install -r "${i}"; done  # xargs?
 
 # https://sr.rikka.app , https://github.com/RikkaApps/StorageRedirect-assets
 if [ "$(adb shell getprop ro.build.version.sdk)" -ge 23 ]; then
-  if [ -z "${ZYGISK}" ]; then
+  if [ -n "${RIRU}" ]; then
     adb install -r -i 'com.android.vending' "$(find_latest "${ASSETS_DIR}" "storage-isolation-v*-$(adb shell getprop ro.product.cpu.abi).apk")"
     read -p "Launch Storage Isolation service from related app, now…"
     magisk_module_install_system "$(find_latest "${ASSETS_DIR}" 'riru-storage-isolation-v*-release.zip')"
   fi
+fi
+
+if [ "${MICROG:-1}" -eq 1 ]; then
+  #adb shell su -c pm grant com.android.vending android.permission.FAKE_PACKAGE_SIGNATURE
+  adb shell su -c npem
+  echo "Be sure to enable the FakeGApps Xposed module for GMS services and any app using GSF."
 fi
 
 #adb_reboot system
