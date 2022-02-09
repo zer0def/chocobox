@@ -15,31 +15,15 @@ until adb shell su -c echo; do sleep 2; done
 . "${MYDIR}/config"
 [ -f "${MYDIR}/override" ] && . "${MYDIR}/override"
 
-MOMOHIDER_COMPONENTS=(
-  #isolated setns
-  app_zygote_magic initrc
-)
-
 preload_ota_cfg
-cat <<EOF | adb shell su
-# Riru app: https://github.com/RikkaApps/Riru
-mkdir -p /data/adb/modules/riru-core
-touch /data/adb/modules/riru-core/allow_install_app
-
-# MomoHider config: https://github.com/canyie/Riru-MomoHider
-mkdir -p /data/adb/momohider
-touch ${MOMOHIDER_COMPONENTS[@]/#/\/data\/adb\/momohider\/}
-EOF
 magisk_module_install_system "${MAGISK_MODULES[@]}"
 for i in "${APKS[@]}"; do adb install -r "${i}"; done  # xargs?
 
 # https://sr.rikka.app , https://github.com/RikkaApps/StorageRedirect-assets
 if [ "$(adb shell getprop ro.build.version.sdk)" -ge 23 ]; then
-  if [ -n "${RIRU}" ]; then
-    adb install -r -i 'com.android.vending' "$(find_latest "${ASSETS_DIR}" "storage-isolation-v*-$(adb shell getprop ro.product.cpu.abi).apk")"
-    read -p "Launch Storage Isolation service from related app, now…"
-    magisk_module_install_system "$(find_latest "${ASSETS_DIR}" 'riru-storage-isolation-v*-release.zip')"
-  fi
+  adb install -r -i 'com.android.vending' "$(find_latest "${ASSETS_DIR}" "storage-isolation-v*-$(adb shell getprop ro.product.cpu.abi).apk")"
+  read -p "Launch Storage Isolation service from related app, now…"
+  magisk_module_install_system "$(find_latest "${ASSETS_DIR}" 'storage-isolation-zygisk-v*-release.zip')"
 fi
 
 if [ "${MICROG:-1}" -eq 1 ]; then

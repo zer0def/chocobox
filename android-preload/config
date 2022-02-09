@@ -26,9 +26,8 @@ APKS=(
   # https://github.com/Ch4t4r/Nebulo # https://git.frostnerd.com/PublicAndroidApps/smokescreen
   #"$(find_latest "${ASSETS_DIR}" 'Nebulo-*.apk')"
 
-  # https://cgit.typeblog.net/Shelter # https://fdroid.typeblog.net/
-  #"$(find_latest "${ASSETS_DIR}" 'shelter-*.apk')"  # https://github.com/PeterCxy/Shelter
-  "$(find_latest "${ASSETS_DIR}" 'net.typeblog.shelter_*.apk')"  # https://f-droid.org/en/packages/net.typeblog.shelter/
+  # https://gitlab.com/secure-system/Insular # https://f-droid.org/en/packages/com.oasisfeng.island.fdroid/
+  #"$(find_latest "${ASSETS_DIR}" 'com.oasisfeng.island.fdroid_*.apk')"
 
   # https://auroraoss.com/
   "$(find_latest "${ASSETS_DIR}" 'AuroraStore_*.apk')"  # https://gitlab.com/AuroraOSS/AuroraStore
@@ -80,6 +79,7 @@ APKS=(
 
   "$(find_latest "${ASSETS_DIR}" 'FairEmail-v*-github-release.apk')"  # https://github.com/M66B/FairEmail
   #"$(find_latest "${ASSETS_DIR}" 'eu.faircode.email_*.apk')"  # https://f-droid.org/en/packages/eu.faircode.email/
+  "$(find_latest "${ASSETS_DIR}" 'org.sufficientlysecure.keychain_*.apk')"  # https://github.com/open-keychain/open-keychain
 
   "$(find_latest "${ASSETS_DIR}" 'hackerskeyboard-v*.apk')"  # https://github.com/klausw/hackerskeyboard
   #"$(find_latest "${ASSETS_DIR}" 'org.pocketworkstation.pckeyboard_*.apk')"  # https://f-droid.org/en/packages/org.pocketworkstation.pckeyboard/
@@ -98,12 +98,9 @@ MAGISK_MODULES=(
   "$(find_latest "${ASSETS_DIR}" 'Busybox_for_Android_NDK-*.zip')"  # https://github.com/Magisk-Modules-Repo/busybox-ndk
   "$(find_latest "${ASSETS_DIR}" 'MagiskHidePropsConf-v*.zip')"  # https://github.com/Magisk-Modules-Repo/MagiskHidePropsConf
   "$(find_latest "${ASSETS_DIR}" 'AuroraServices-v*-magisk-unity.zip')"  # https://gitlab.com/AuroraOSS/AuroraServices
+  "$(find_latest "${ASSETS_DIR}" 'terminal_systemizer_v*.zip')"  # https://github.com/xeddmc/terminal_systemizer
+  "$(find_latest "${ASSETS_DIR}" 'Shamiko-v*-release.zip')"
 )
-
-[ -n "${RIRU}" ] && MAGISK_MODULES+=(
-  "$(find_latest "${ASSETS_DIR}" 'riru-v*.zip')"  # https://github.com/RikkaApps/Riru
-  "$(find_latest "${ASSETS_DIR}" 'riru-unshare-*.zip')"  # https://github.com/vvb2060/riru-unshare
-) || MAGISK_MODULES+=("$(find_latest "${ASSETS_DIR}" 'Shamiko-v*-release.zip')")
 
 adb wait-for-usb-device
 
@@ -174,8 +171,6 @@ if [ "$(adb shell getprop ro.build.version.sdk)" -ge 26 ]; then
   )
   MAGISK_MODULES+=(
     #"$(find_latest "${ASSETS_DIR}" 'EdXposed-v*-master.zip')"  # https://github.com/ElderDrivers/EdXposed
-  )
-  [ -z "${RIRU}" ] || MAGISK_MODULES+=(
     "$(find_latest "${ASSETS_DIR}" 'sui-v*.zip')"  # https://github.com/RikkaApps/Sui
   )
 else
@@ -186,32 +181,17 @@ else
 fi
 
 if [ "$(adb shell getprop ro.build.version.sdk)" -ge 27 ]; then
-  if [ -z "${RIRU}" ]; then
-    MAGISK_MODULES+=(
-      "$(find_latest "${ASSETS_DIR}" 'safetynet-fix-v2.*.zip')"  # https://github.com/kdrag0n/safetynet-fix
-      "$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-zygisk-release.zip')"  # https://github.com/LSPosed/LSPosed
-    )
-  else
-    MAGISK_MODULES+=(
-      "$(find_latest "${ASSETS_DIR}" 'safetynet-fix-v2.1.*.zip')"  # https://github.com/kdrag0n/safetynet-fix
-      "$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-riru-release.zip')"  # https://github.com/LSPosed/LSPosed
-    )
-  fi
+  MAGISK_MODULES+=(
+    "$(find_latest "${ASSETS_DIR}" 'safetynet-fix-v2.*.zip')"  # https://github.com/kdrag0n/safetynet-fix
+    "$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-zygisk-release.zip')"  # https://github.com/LSPosed/LSPosed
+  )
   APKS+=("$(find_latest "${ASSETS_DIR}" 'LSPosed-v*-release.apk')")
 fi
 
 if [ "$(adb shell getprop ro.build.version.sdk)" -ge 28 ]; then
+  MAGISK_MODULES+=("$(find_latest "${ASSETS_DIR}" 'zygisk-ifw-enhance-v*.zip')")  # https://github.com/Kr328/Riru-IFWEnhance
   APKS+=(
     "$(find_latest "${ASSETS_DIR}" 'RnIntentClean-v*.apk')"  # https://github.com/TigerBeanst/RnIntentClean
     #"$(find_latest "${ASSETS_DIR}" 'com.jakting.shareclean_*.apk')"  # https://ic.into.icu/
-  )
-
-  # https://github.com/Kr328/Riru-IFWEnhance
-  [ -n "${RIRU}" ] && MAGISK_MODULES+=(
-    #"$(find_latest "${ASSETS_DIR}" 'ifw-enhance-v*-riru.zip')"
-    "$(find_latest "${ASSETS_DIR}" 'riru-ifw-enhance-v*.zip')"
-  ) || MAGISK_MODULES+=(
-    #"$(find_latest "${ASSETS_DIR}" 'ifw-enhance-v*-zygisk.zip')"
-    "$(find_latest "${ASSETS_DIR}" 'zygisk-ifw-enhance-v*.zip')"
   )
 fi

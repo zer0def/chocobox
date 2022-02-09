@@ -123,7 +123,7 @@ nanodroid_nlpbackend=0000
 nanodroid_mapsv1=0
 #nanodroid_play=30
 nanodroid_play=20
-nanodroid_fdroid=2
+nanodroid_fdroid=3
 nanodroid_apps=0
 nanodroid_overlay=1
 nanodroid_bash=0
@@ -195,7 +195,7 @@ setup_encryption(){
   read -p "Settings -> Security -> Encryption and credentials -> Encrypt phone"
   read -p "Settings -> Security -> Screen lock -> Secure startup"
   adb wait-for-usb-device
-  reboot_and_wait_for_recovery
+  #reboot_and_wait_for_recovery
 }
 
 magisk_boot_patch(){
@@ -205,8 +205,7 @@ magisk_boot_patch(){
 
   adb wait-for-usb-recovery
   preload_ota_cfg
-  [ -n "${MAGISK_BOOT_PATCH}" ] || "ota_pkg_${OTA_METHOD:-push}" "${MAGISK_ZIP}"
-  [ -z "${MAGISK_BOOT_PATCH}" ] || (echo "cat ${BOOT_PART}" | adb shell >"${TMP_BOOT_IMG}")
+  [ -z "${MAGISK_BOOT_PATCH}" ] && "ota_pkg_${OTA_METHOD:-push}" "${MAGISK_ZIP}" || (echo "cat ${BOOT_PART}" | adb shell >"${TMP_BOOT_IMG}")
   "ota_pkg_${OTA_METHOD:-push}" "${COMPLEMENT_ZIPS[@]}"
 
   if [ -n "${WIPE_DATA}" ] && [ -n "${WIPE_DATA_FASTBOOT}" ]; then
