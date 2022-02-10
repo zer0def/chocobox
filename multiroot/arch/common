@@ -1,0 +1,42 @@
+MULTIENCRYPT_DELIMITER="@"
+
+install_pkgbuild(){
+  local mountpoint="${1}"
+  shift
+  arch-chroot "${mountpoint}" /bin/bash -ex <<EOF
+export PKGBUILD_SUDOERS="/etc/sudoers.d/pkgbuild" PKGBUILD_TMPDIR="\$(mktemp -d)" PKGBUILD_USER="daemon"
+echo "\${PKGBUILD_USER} ALL=(ALL) NOPASSWD: ALL" >"\${PKGBUILD_SUDOERS}"
+chown "\${PKGBUILD_USER}":"\${PKGBUILD_USER}" "\${PKGBUILD_TMPDIR}"
+su -ps /bin/bash daemon <<'EOD'
+set -ex
+cd /tmp
+for i in ${@}; do
+  BUILD_DIR="\$(mktemp -d)"
+  git clone https://github.com/zer0def/PKGBUILDs -b \${i} "\${BUILD_DIR}"
+  pushd "\${BUILD_DIR}"
+  makepkg --noconfirm -Crsf
+  mv *.pkg.tar* "\${PKGBUILD_TMPDIR}"
+  popd
+  rm -rf "\${BUILD_DIR}"
+done
+EOD
+pacman --noconfirm -U "\${PKGBUILD_TMPDIR}"/*.pkg.tar*
+rm -rf "\${PKGBUILD_TMPDIR}" "\${PKGBUILD_SUDOERS}"
+EOF
+}
+
+arch_bootstrap(){
+  # networkmanager network-manager-applet ufw \
+  # pulseaudio-{alsa,bluetooth,jack} pavucontrol jack2{,-dbus} \
+  # screen gvim htop iotop iftop strace rsync mtr lshw lsof ntfs-3g sudo \
+  # mpv streamlink youtube-dl mesa-vdpau libva-{intel,mesa,vdpau}-driver intel-media-driver intel-media-sdk \
+  # lxqt xorg xorg-drivers opencl-mesa vulkan-{intel,radeon,mesa-layers,swrast} python-py{opencl,cuda}
+  pacstrap -c "${1}" base ${ARCH_PACKAGES[@]}
+  install_pkgbuild "${1}" khefin mkinitcpio-multiencrypt
+
+  cat <<EOF >>"${1}/etc/default/grub"
+GRUB_ENABLE_CRYPTODISK=y
+GRUB_DEFAULT='Advanced options for Arch Linux>Arch Linux, with Linux linux-hardened'
+GRUB_CMDLINE_LINUX_DEFAULT+=' multiencrypt_delimiter=${MULTIENCRYPT_DELIMITER} cryptdevices=$(string_join "${MULTIENCRYPT_DELIMITER}" $(for j in $(seq 0 $((${#BOOTS[@]}-1))); do echo "${BOOT_BACKINGS[${j}]}:${BOOTS[${j}]}"; done))${MULTIENCRYPT_DELIMITER}$(string_join "${MULTIENCRYPT_DELIMITER}" $(for j in $(seq 0 $((${#DETACHED_LUKS[@]}-1))); do echo "${DETACHED_LUKS_BACKINGS[${j}]}:${DETACHED_LUKS[${j}]}"; done)) cryptheaders=$(for j in $(seq 0 $((${#BOOTS[@]}-1))); do echo -n "${MULTIENCRYPT_DELIMITER}"; done)$(string_join "${MULTIENCRYPT_DELIMITER}" $(for j in $(seq 0 $((${#DETACHED_LUKS[@]}-1))); do echo "/dev/mapper/${BOOTS[0]}:ext4:/headers/${DETACHED_LUKS[${j}]}"; done))'
+EOF
+}

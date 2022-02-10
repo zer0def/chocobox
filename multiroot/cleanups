@@ -1,0 +1,25 @@
+common_cleanup(){
+  local i
+  for i in ${BOOTS[@]}; do cryptsetup close "${i}" ||:; done
+  for i in ${DETACHED_LUKS[@]}; do cryptsetup close "${i}" ||:; done
+  mdadm -S /dev/md*
+}
+
+lvm_cleanup(){
+  set +e
+  umount -R "${MOUNTPOINT}"/*
+  # shellcheck disable=SC2004
+  for i in $(seq 0 $((${ROOT_COUNT}-1))); do
+    cryptsetup close "${MOUNT[${i}]}"
+    lvchange -an "${VG_NAME}/${LV[${i}]}"
+  done
+  vgchange -an "${VG_NAME}"
+  common_cleanup
+}
+
+zfs_cleanup(){
+  set +e
+  umount -R "${MOUNTPOINT}"
+  zpool export "${ZPOOL_NAME}"
+  common_cleanup
+}

@@ -1,11 +1,12 @@
 #!/bin/bash -ex
 
 # shellcheck disable=SC1090
-. "$(dirname "$(readlink -f "${0}")")/config"
+. "$(dirname "$(readlink -f "${0}")")/../config"
 # shellcheck disable=SC1090
+. "$(dirname "$(readlink -f "${0}")")/../common"
 . "$(dirname "$(readlink -f "${0}")")/common"
 
-finish_zfs(){
+arch_zfs_finish(){
   local i="${1}"
 
   # refer to: /etc/zfs/zed.d/history_event-zfs-list-cacher.sh
@@ -14,84 +15,16 @@ finish_zfs(){
   zfs list -H -t filesystem -r "${DATASET[${i}]}" -o "${PROPS}" | sed -E "s#${MOUNTPOINT}/?#/#g" > "${MOUNTPOINT}/etc/zfs/zfs-list.cache/${ZPOOL_NAME//\//-}"
 }
 
-cleanup(){
-  set +e
-  umount -R "${MOUNTPOINT}"
-  zpool export "${ZPOOL_NAME}"
-  cleanup_common
-}
-trap cleanup INT QUIT TERM EXIT
+trap zfs_cleanup INT QUIT TERM EXIT
 
 prep_bios_uefi
 #prep_uefi_only
 
-# shellcheck disable=SC2124
-[ ${#DEVICES[@]} -eq 2 ] && ZPOOL_TOPOLOGY="mirror" ||:
-[ ${#DEVICES[@]} -gt 1 ] && VDEVS="${ZPOOL_TOPOLOGY} ${DETACHED_LUKS[@]/#/\/dev\/mapper\/}" || VDEVS="${DETACHED_LUKS[@]/#/\/dev\/mapper\/}"
-
-# refs:
-# - https://openzfs.github.io/openzfs-docs/Getting%20Started/Arch%20Linux/Arch%20Linux%20Root%20on%20ZFS.html
-# - https://wiki.archlinux.org/index.php/Install_Arch_Linux_on_ZFS
-
-zpool create -f \
-  -o cachefile=/etc/zfs/zpool.cache \
-  -o autoexpand=on \
-  -o autotrim=on \
-  -o ashift=12 \
-  -o feature@encryption=enabled \
-  -O dedup=skein,verify \
-  -O compression=zstd-19 \
-  -O sync=always \
-  -O atime=off \
-  \
-  -O acltype=posixacl \
-  -O relatime=on \
-  -O xattr=sa \
-  -O dnodesize=legacy \
-  -O normalization=formD \
-  -O canmount=off \
-  -O mountpoint=/ \
-  -R "${MOUNTPOINT}" \
-  "${ZPOOL_NAME}" ${VDEVS}
-
-# there's a smarter way to do this, i'm sure
-DATASET=()
-ROOTFS=()
-
-# shellcheck disable=SC2034
-HOMES=()
-# shellcheck disable=SC2034
-ROOTHOME=()
-# shellcheck disable=SC2034
-SRV=()
-# shellcheck disable=SC2034
-VAR=()
-
-declare -A MOUNTPOINT_MAP=(
-  [HOMES]="/home"
-  [ROOTHOME]="/root"
-  [SRV]="/srv"
-  [VAR]="/var"
-)
+zfs_setup "${MOUNTPOINT}"
 
 # shellcheck disable=SC2004
 for i in $(seq 0 $((${ROOT_COUNT}-1))); do
-  DATASET+=("${ZPOOL_NAME}/$(uuidgen)")
-
-  for j in ROOTFS HOMES ROOTHOME SRV VAR; do
-    declare -a "${j}+=("${DATASET[${i}]}/$(uuidgen)")"
-  done
-
-  zfs create \
-    -o canmount=off \
-    -o mountpoint=none \
-    -o encryption=aes-256-gcm \
-    -o keyformat=passphrase \
-    -o keylocation=prompt \
-    "${DATASET[${i}]}"
-
-  # bootstrap the template
-  if [ "${i}" -eq 0 ]; then
+  if [ "${i}" -eq 0 ]; then  # bootstrap the template
     zfs create -o mountpoint=/ -o canmount=noauto "${ROOTFS[${i}]}"
     zfs mount -Ol "${ROOTFS[${i}]}"
     for j in "${!MOUNTPOINT_MAP[@]}"; do
@@ -99,7 +32,7 @@ for i in $(seq 0 $((${ROOT_COUNT}-1))); do
       zfs create -o mountpoint="${MOUNTPOINT_MAP[${j}]}" -o canmount=on "${!k}"
     done
 
-    bootstrap_arch "${MOUNTPOINT}"
+    DISTRO=arch common_bootstrap "${MOUNTPOINT}"
 
     curl -sSL https://archzfs.com/archzfs.gpg | arch-chroot "${MOUNTPOINT}" pacman-key -a -
     arch-chroot "${MOUNTPOINT}" /bin/sh <<'EOF'
@@ -121,13 +54,12 @@ EOF
     sed -i "s#rpool=.*#rpool=\`zdb -l \${GRUB_DEVICE} | awk -F\"'\" '/[[:blank:]]name:[[:blank:]]/ {print \$2}'\`#" "${MOUNTPOINT}/etc/grub.d/10_linux"
     #sed -i "s#LINUX_ROOT_DEVICE=\"ZFS=.*#LINUX_ROOT_DEVICE=\"zfs zfs=\`zdb -l \${GRUB_DEVICE} | awk -F\"'\" '/[[:blank:]]name:[[:blank:]]/ {print \$2}'\`\"#" "${MOUNTPOINT}/etc/grub.d/10_linux"
 
-    ####
-    finish_zfs "${i}"
+    arch_zfs_finish "${i}"
 
     # generate non-zfs mountpoints
     genfstab -U -p "${MOUNTPOINT}" | sed -e "/${DATASET[${i}]//\//\\/}/d" -e '/^[[:space:]]*$/d' -e '/\/dev\/zram/d' > "${MOUNTPOINT}/etc/fstab"
 
-    finish_arch "${MOUNTPOINT}"
+    INITRD_UPDATE_CMD="mkinitcpio -P" common_finish "${MOUNTPOINT}"
   else
     # `zfs send` - data decrypted by source and re-encrypted by the destination
     # `zfs send -r` - raw (possibly ciphertext) data sent by source to destination
@@ -145,7 +77,7 @@ EOF
       zfs destroy "${!l}@--head--"
     done
 
-    finish_zfs "${i}"
+    arch_zfs_finish "${i}"
   fi
   umount -R "${MOUNTPOINT}"
 done

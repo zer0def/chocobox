@@ -1,0 +1,38 @@
+common_bootstrap(){
+  local i
+  mkdir -p "${1}/boot"
+  mount "/dev/mapper/${BOOTS[0]}" "${1}/boot"
+
+  mkdir -p "${1}/boot/efi"
+  mount "${ESPS[0]}" "${1}/boot/efi"
+
+  "${DISTRO:-arch}_bootstrap" "${1}"
+
+  # hostname
+  echo 'duckduckgoose' > "${1}/etc/hostname"
+
+  # timezone
+  pushd "${1}/etc"
+  ln -sf ../usr/share/zoneinfo/Europe/Warsaw localtime
+  popd
+
+  # RAID arrays
+  arch-chroot "${1}" /bin/sh -c 'mdadm --detail --scan >> /etc/mdadm.conf'
+
+  # BIOS GRUB
+  [ "${BIOS_BOOT:-0}" -ne 1 ] || for i in ${!BOOTDEVS}; do arch-chroot "${1}" /bin/sh -c "grub-install --target=i386-pc --recheck '${i}'"; done
+
+  # UEFI GRUB
+  for i in $(seq 0 $((${#ESPS[@]}-1))); do
+    umount -R "${1}/boot"
+    mount "/dev/mapper/${BOOTS[${i}]}" "${1}/boot"
+    mkdir -p "${1}/boot/efi"
+    mount "${ESPS[${i}]}" "${1}/boot/efi"
+    arch-chroot "${1}" /bin/sh -c "grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB --removable"
+  done
+
+  # root
+  echo -e 'duckduckgoose\nduckduckgoose' | arch-chroot "${1}" passwd
+
+  BOOT_SEED="${BOOTS[${i}]}"
+}

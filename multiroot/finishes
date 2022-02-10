@@ -1,0 +1,19 @@
+common_finish(){
+  local i tmp_boot="$(mktemp -d)"
+  mount "/dev/mapper/${BOOT_SEED}" "${tmp_boot}"
+  for i in ${BOOTS[@]}; do
+    umount -R "${1}/boot"
+    #[ "${i}" = "${BOOT_SEED}" ] && continue ||:
+    mount "/dev/mapper/${i}" "${1}/boot"
+    rsync -xaSPAX -zz "${tmp_boot}/" "${1}/boot/"
+    mkdir -p "${1}/boot/headers"
+    rsync -xaSPAX -zz "${HEADER_TMPDIR}/" "${1}/boot/headers/"
+    arch-chroot "${1}" /bin/sh <<EOF
+${INITRD_UPDATE_CMD}
+ZPOOL_VDEV_NAME_PATH=1 /bin/bash \$(command -v grub-mkconfig) -o /boot/grub/grub.cfg
+EOF
+    #umount -R "${1}/boot"
+  done
+  umount "${tmp_boot}"
+  rm -rf "${HEADER_TMPDIR}"  # shred?
+}

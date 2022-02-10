@@ -1,0 +1,94 @@
+LV=()
+MOUNT=()
+
+lvm_setup(){
+  pvcreate -ff "${DETACHED_LUKS[@]/#/\/dev\/mapper\/}"
+  vgcreate "${VG_NAME}" "${DETACHED_LUKS[@]/#/\/dev\/mapper\/}"
+
+  # shellcheck disable=SC2004
+  for i in $(seq 0 $((${ROOT_COUNT}-1))); do
+    LV+=("$(uuidgen)") MOUNT+=("$(uuidgen)")
+    # shellcheck disable=SC2004
+    lvcreate -n "${LV[${i}]}" -l "$((100/$((${ROOT_COUNT}-${i}))))%FREE" "${VG_NAME}"
+
+    TMP_HEADER="${HEADER_TMPDIR}/${MOUNT[${i}]}"
+    dd if=/dev/urandom of="${TMP_HEADER}" bs=16M count=1
+    cryptsetup -h "${CRYPTO_HASH}" -c "${CRYPTO_CIPHER}" -s "${CRYPTO_KEYSIZE}" -y luksFormat --header "${TMP_HEADER}" "/dev/${VG_NAME}/${LV[${i}]}"
+    cryptsetup luksOpen --header "${TMP_HEADER}" "/dev/${VG_NAME}/${LV[${i}]}" "${MOUNT[${i}]}"
+    mkfs.ext4 -m 0 -i 4096 -b 4096 -E lazy_itable_init=0,lazy_journal_init=0 "/dev/mapper/${MOUNT[${i}]}"
+  done
+}
+
+# there's a smarter way to do this, i'm sure
+DATASET=()
+ROOTFS=()
+
+# shellcheck disable=SC2034
+HOMES=()
+# shellcheck disable=SC2034
+ROOTHOME=()
+# shellcheck disable=SC2034
+SRV=()
+# shellcheck disable=SC2034
+VAR=()
+
+declare -A MOUNTPOINT_MAP=(
+  [HOMES]="/home"
+  [ROOTHOME]="/root"
+  [SRV]="/srv"
+  [VAR]="/var"
+)
+
+# shellcheck disable=SC2124
+[ ${#DEVICES[@]} -ne 2 ] || ZPOOL_TOPOLOGY="mirror"
+[ ${#DEVICES[@]} -gt 1 ] && VDEVS="${ZPOOL_TOPOLOGY} ${DETACHED_LUKS[@]/#/\/dev\/mapper\/}" || VDEVS="${DETACHED_LUKS[@]/#/\/dev\/mapper\/}"
+
+# refs:
+# - https://openzfs.github.io/openzfs-docs/Getting%20Started/Arch%20Linux/Arch%20Linux%20Root%20on%20ZFS.html
+# - https://wiki.archlinux.org/index.php/Install_Arch_Linux_on_ZFS
+
+zfs_setup(){
+  zpool create -f \
+    -o cachefile=/etc/zfs/zpool.cache \
+    -o autoexpand=on \
+    -o autotrim=on \
+    -o ashift=12 \
+    -o feature@encryption=enabled \
+    -O dedup=skein,verify \
+    -O compression=zstd-19 \
+    -O sync=always \
+    -O atime=off \
+    \
+    -O acltype=posixacl \
+    -O relatime=on \
+    -O xattr=sa \
+    -O dnodesize=legacy \
+    -O normalization=formD \
+    -O canmount=off \
+    -O mountpoint=/ \
+    -R "${1}" \
+  "${ZPOOL_NAME}" ${VDEVS}
+
+  for i in $(seq 0 $((${ROOT_COUNT}-1))); do
+    DATASET+=("${ZPOOL_NAME}/$(uuidgen)")
+
+    for j in ROOTFS HOMES ROOTHOME SRV VAR; do
+      declare -g -a "${j}+=("${DATASET[${i}]}/$(uuidgen)")"
+    done
+
+    zfs create \
+      -o canmount=off \
+      -o mountpoint=none \
+      -o encryption=aes-256-gcm \
+      -o keyformat=passphrase \
+      -o keylocation=prompt \
+      "${DATASET[${i}]}"
+
+    #zfs create -o mountpoint=/ -o canmount=noauto "${ROOTFS[${i}]}"
+    #zfs mount -Ol "${ROOTFS[${i}]}"
+    #for j in "${!MOUNTPOINT_MAP[@]}"; do
+    #  k="${j}[${i}]"
+    #  zfs create -o mountpoint="${MOUNTPOINT_MAP[${j}]}" -o canmount=on "${!k}"
+    #done
+  done
+}

@@ -1,3 +1,6 @@
 [submodule "osp-nginx-rtmp"]
 	path = oci-images/osp/nginx
 	url = https://github.com/zer0def/docker-nginx-rtmp
+[submodule "android-debloater"]
+	path = android-preload/MinDebloater
+	url = https://github.com/FriendlyNeighborhoodShane/MinDebloater
