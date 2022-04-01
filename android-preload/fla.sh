@@ -7,6 +7,7 @@ DEVICE="${DEVICE:-i9082-baffin}"
 OTA_METHOD="${OTA_METHOD:-push}"
 . "${MYDIR}/common"
 . "${MYDIR}/flashcfgs/${DEVICE}"
+[ -f "${MYDIR}/override" ] && . "${MYDIR}/override"
 #MAGISK_BOOT_PATCH=0
 
 adb kill-server
@@ -14,12 +15,22 @@ adb kill-server
 #data_decryption_attempt "$(uuidgen)"
 
 adb wait-for-usb-recovery  # if you're stuck here, try starting and cancelling `adb sideload`
-[ -n "${DIRTY_FLASH}" ] || SYSTEM_WIPE="/system"
-for i in ${SYSTEM_WIPE:+/system} /cache dalvik; do
-  adb shell twrp wipe "${i}" ||:
-  adb wait-for-usb-recovery
-  sleep 2
-done
+#[ -n "${DIRTY_FLASH}" ] || SYSTEM_WIPE="/system"
+SYSTEM_WIPE=1
+if [ -n "${SYSTEM_WIPE}" ]; then
+  adb shell sh -x <<'EOF'
+BLK_DEV="$(readlink -f /dev/block/by-name/system)"
+umount "$(mount | grep "^${BLK_DEV}" | cut -d' ' -f3)"
+make_ext4fs -a /system /dev/block/by-name/system || mke2fs -t ext4 /dev/block/by-name/system
+EOF
+fi
+adb shell twrp wipe /cache
+adb shell twrp wipe dalvik
+#for i in ${SYSTEM_WIPE} /cache dalvik; do
+#  adb shell twrp wipe "${i}" ||:
+#  adb wait-for-usb-recovery
+#  sleep 2
+#done
 #$(getprop twrp.mount_to_decrypt) → 0 ??
 if [ -z "${DIRTY_FLASH}" ]; then
   [ -n "$(adb shell getprop ro.crypto.fs_crypto_blkdev)" ] || wipe_data
@@ -46,9 +57,10 @@ EOF
 fi
 
 adb wait-for-usb-recovery
+
+preload_ota_cfg
 "ota_pkg_${OTA_METHOD:-push}" "${ANDROID_ZIPS[@]}"
-#preload_ota_cfg
-#"ota_pkg_${OTA_METHOD:-push}" "${MAGISK_ZIP}"
+
 [ -z "${DEBUG}" ] || inject_boot_logcat
 
 magisk_boot_patch  # dirty flash adjustment?

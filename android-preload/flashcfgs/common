@@ -1,10 +1,23 @@
+MIN_DEBLOATER="$(mktemp).zip"
+cd "$(readlink -f $(find -name 'MinDebloater' | head -n1))"
+zip -r "${MIN_DEBLOATER}" *
+cd "${OLDPWD}"
 COMPLEMENT_ZIPS=(
+  "${MIN_DEBLOATER}"
+  "${MIN_DEBLOATER}"  # twice, to get rid of backups
+)
+[ "${MICROG:-1}" -ne 1 ] || COMPLEMENT_ZIPS+=(
+#  "$(find_latest "${MYDIR}" 'NanoDroid-microG-*.zip')"
+#  #"$(find_latest "${MYDIR}" 'NanoDroid-patcher-*.zip')"  # broken as of A12
+#
+#  # https://github.com/FriendlyNeighborhoodShane/MinMicroG
+#  "$(find_latest "${MYDIR}" 'MinMicroG-NoGoolag-*.zip')"
+#  "$(find_latest "${MYDIR}" 'MinMicroG-MinimalIAP-*.zip')"
+  "$(find_latest "${MYDIR}" 'MinMicroG-Standard-*.zip')"
+)
+COMPLEMENT_ZIPS+=(
   "$(find_latest "${MYDIR}" 'NanoDroid-BromiteWebView-*.zip')"
   #"$(find_latest "${MYDIR}" 'NanoDroid-OsmAnd-*.zip')"
-  "$(find_latest "${MYDIR}" 'NanoDroid-full-*.zip')"
-
-  # https://github.com/FriendlyNeighborhoodShane/MinMicroG
-  #"$(find_latest "${MYDIR}" 'MinMicroG-NoGoolag-*.zip')"
-  #"$(find_latest "${MYDIR}" 'MinMicroG-MinimalIAP-*.zip')"
-  "$(find_latest "${MYDIR}" 'MinMicroG-Standard-*.zip')"
+  #"$(find_latest "${MYDIR}" 'NanoDroid-full-*.zip')"
+  "$(find_latest "${MYDIR}" 'NanoDroid-fdroid-*.zip')"
 )

@@ -56,19 +56,25 @@ WebViewStock
 
 (AEXPapers)
 (Camera)
+(Camera2)
 (CameraStock)
 (crDroidMusic)
 (DuckDuckGo)
 (EasterEgg)
+(Eleven)
 (GalleryGo)
 (GalleryGoPrebuilt)
 (GoogleCameraGo)
+(Jelly)
 (messaging)
 (MusicFX)
+(OneTimeInitializer)
 (Phonograph)
 (Recorder)
+(Stk)
 (ViaBrowser)
 (ViaPrebuilt)
+(XiaomiParts)
 EOF
   adb push "${TMPFILE}" /tmp/install/.gapps-config || adb push "${TMPFILE}" /data/.gapps-config || adb push "${TMPFILE}" /sdcard/.gapps-config
 
@@ -94,41 +100,42 @@ WebViewStock
 AEXPapers
 AudioFX
 Camera
+Camera2
 CameraStock
 crDroidMusic
 DuckDuckGo
 EasterEgg
+Eleven
 GalleryGo
 GalleryGoPrebuilt
 GoogleCameraGo
+Jelly
 messaging
 MusicFX
 MusicPlayerGO
+OneTimeInitializer
 Phonograph
 Recorder
 Stk
 ViaBrowser
 ViaPrebuilt
 webview
+XiaomiParts
 EOF
   adb push "${TMPFILE}" /tmp/.nanodroid-overlay || adb push "${TMPFILE}" /data/.nanodroid-overlay
 
   # NanoDroid: https://gitlab.com/Nanolx/NanoDroid/-/blob/master/doc/AlterInstallation.md
   cat <<EOF >"${TMPFILE}"
-nanodroid_microg=0
-#nanodroid_nlpbackend=1111
-#nanodroid_nlpbackend=1101
-nanodroid_nlpbackend=0000
-#nanodroid_mapsv1=1
-nanodroid_mapsv1=0
-#nanodroid_play=30
-nanodroid_play=20
-nanodroid_fdroid=3
+nanodroid_microg=${MICROG:-1}
+nanodroid_nlpbackend=1111
+nanodroid_mapsv1=1
+nanodroid_play=30
+nanodroid_fdroid=1
 nanodroid_apps=0
 nanodroid_overlay=1
 nanodroid_bash=0
 nanodroid_init="10_sqlite 20_fstrim 50_logscleaner"
-nanodroid_gsync=0
+nanodroid_gsync=1
 nanodroid_swipe=0
 EOF
   adb push "${TMPFILE}" /tmp/.nanodroid-setup || adb push "${TMPFILE}" /data/.nanodroid-setup
@@ -154,19 +161,20 @@ ota_pkg_sideload(){
 }
 
 ota_push_remote_path(){
-  #for i in $(adb shell "df 2>/dev/null | awk '/\/(data|sdcard|cache|tmp)/ {print \$NF\" \"\$(NF-2)}' | sort -rnu -k2 | awk '{print \$1}'" | sed 's/\r//g'); do
-  for i in $(adb shell "df 2>/dev/null | grep -E '/(data|sdcard|cache|tmp)' | cut -F4,6 | sort -rnu -k2 | cut -F2" | sed 's/\r//g'); do
+  for i in $(adb shell "df 2>/dev/null | awk '/ \/(data|sdcard|cache|tmp)/ {print \$NF\" \"\$(NF-2)}' | sort -rnu -k2 | awk '{print \$1}'" | sed 's/\r//g'); do
+  #for i in $(adb shell "df 2>/dev/null | grep -E '/(data|sdcard|cache|tmp)' | cut -F4,6 | sort -rnu -k2 | cut -F2" | sed 's/\r//g'); do
     [ -z "`adb shell "awk '/ ${i/\//\\\/} [^, ]*[, ]ro[, ]/ {print $2}' /proc/mounts || (grep -E '${i} [^, ]*[, ]ro[, ]' /proc/mounts | cut -F2)"`" ] && echo ${i} && return 0 ||:
   done
 }
 
 ota_pkg_push(){
-  local i remote_path="$(ota_push_remote_path)"
+  OTA_PUSH_REMOTE_PATH="${OTA_PUSH_REMOTE_PATH:-$(ota_push_remote_path)}"
+  local i
 
   adb wait-for-usb-recovery
   for i in "${@}"; do
-    adb push "${i}" "${remote_path}/${i##*/}"
-    adb shell "twrp install '${remote_path}/${i##*/}' && (rm '${remote_path}/${i##*/}' ||:)"
+    adb push "${i}" "${OTA_PUSH_REMOTE_PATH}/${i##*/}"
+    adb shell "twrp install '${OTA_PUSH_REMOTE_PATH}/${i##*/}' && (rm '${OTA_PUSH_REMOTE_PATH}/${i##*/}' ||:)"
     adb wait-for-usb-recovery
   done
 }
@@ -208,6 +216,13 @@ magisk_boot_patch(){
   [ -z "${MAGISK_BOOT_PATCH}" ] && "ota_pkg_${OTA_METHOD:-push}" "${MAGISK_ZIP}" || (echo "cat ${BOOT_PART}" | adb shell >"${TMP_BOOT_IMG}")
   "ota_pkg_${OTA_METHOD:-push}" "${COMPLEMENT_ZIPS[@]}"
 
+  #adb push "$(find "${ASSETS_DIR}" -type f -iname 'mindebloater-gapps.txt')" "$(ota_push_remote_path)/mindebloater.txt"
+  #MIN_DEBLOATER="$(mktemp).zip"
+  #cd "$(readlink -f $(find -name 'MinDebloater' | head -n1))"
+  #zip -r "${MIN_DEBLOATER}" *
+  #cd "${OLDPWD}"
+  #"ota_pkg_${OTA_METHOD:-push}" "${MIN_DEBLOATER}" "${MIN_DEBLOATER}"
+
   if [ -n "${WIPE_DATA}" ] && [ -n "${WIPE_DATA_FASTBOOT}" ]; then
     adb reboot bootloader
     sudo fastboot -w
@@ -248,15 +263,19 @@ data_decryption_attempt(){
 inject_boot_logcat(){
   adb wait-for-usb-recovery
   cat <<'EOD' | adb shell sh -x
-mount /system
+#mount /system
+twrp mount system
 for i in $(find / -iname "*.prop"); do
   cat <<EOF >>"${i}"
+debug.atrace.tags.enableflags=0
 ro.secure=0
 ro.adb.secure=0
 ro.debuggable=1
 persist.service.adb.enable=1
 persist.service.debuggable=1
-persist.sys.usb.config=mtp,adb
+persist.sys.strictmode.disable=true
+persist.sys.usb.config=adb
+persist.traced.enable=1
 EOF
 done
 EOD
@@ -280,4 +299,8 @@ done
 EOF
   ## breaks module installation when they require reboots
   #adb shell su -c 'rm -rf /data/adb/modules_update/*'
+}
+
+preload_post_hook(){
+  :
 }

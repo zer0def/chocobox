@@ -15,7 +15,7 @@ until adb shell su -c echo; do sleep 2; done
 . "${MYDIR}/config"
 [ -f "${MYDIR}/override" ] && . "${MYDIR}/override"
 
-preload_ota_cfg
+#adb push "$(find_latest "${ASSETS_DIR}" 'Google_Play_Store-*.apk')" /data/adb/Phonesky.apk
 magisk_module_install_system "${MAGISK_MODULES[@]}"
 for i in "${APKS[@]}"; do adb install -r "${i}"; done  # xargs?
 
@@ -23,7 +23,7 @@ for i in "${APKS[@]}"; do adb install -r "${i}"; done  # xargs?
 if [ "$(adb shell getprop ro.build.version.sdk)" -ge 23 ]; then
   adb install -r -i 'com.android.vending' "$(find_latest "${ASSETS_DIR}" "storage-isolation-v*-$(adb shell getprop ro.product.cpu.abi).apk")"
   read -p "Launch Storage Isolation service from related app, now…"
-  magisk_module_install_system "$(find_latest "${ASSETS_DIR}" 'storage-isolation-zygisk-v*-release.zip')"
+  [ -z "${RIRU}" ] && magisk_module_install_system "$(find_latest "${ASSETS_DIR}" 'storage-isolation-zygisk-v*-release.zip')" || magisk_module_install_system "$(find_latest "${ASSETS_DIR}" 'storage-isolation-riru-v*-release.zip')"
 fi
 
 if [ "${MICROG:-1}" -eq 1 ]; then
@@ -31,6 +31,8 @@ if [ "${MICROG:-1}" -eq 1 ]; then
   adb shell su -c npem
   echo "Be sure to enable the FakeGApps Xposed module for GMS services and any app using GSF."
 fi
+
+preload_post_hook
 
 #adb_reboot system
 echo 'This would be a good time to enable Zygisk and restart the device as many times as necessary for Magisk and Xposed modules to work.'
