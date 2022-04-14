@@ -1,0 +1,130 @@
+{{- if .Capabilities.APIVersions.Has "cert-manager.io/v1" }}
+{{- if index (default (dict) (index .Values.tls "issuerRef")) "name" }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "patroni.postgresql.tls.secret" . }}
+spec:
+  secretName: {{ include "patroni.postgresql.tls.secret" . }}
+  commonName: {{ printf "%s.%s.svc" (include "patroni.hashedname" .) .Release.Namespace | quote }}
+  dnsNames:
+  - {{ include "patroni.hashedname" . | quote }}
+  - {{ printf "%s.%s.svc" (include "patroni.hashedname" .) .Release.Namespace | quote }}
+  - {{ printf "%s.%s.svc.cluster.local" (include "patroni.hashedname" .) .Release.Namespace | quote }}
+  issuerRef:
+    name: {{ .Values.tls.issuerRef.name }}
+    kind: {{ default "Issuer" (index .Values.tls.issuerRef "kind") }}
+{{- end }}
+{{- end }}
+{{- if and (not (index (default (dict) (index .Values.tls "issuerRef")) "name")) (index .Values.tls "ca") (index .Values.tls "crt") (index .Values.tls "key") }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "patroni.postgresql.tls.secret" . }}
+type: kubernetes.io/tls
+data:
+  ca.crt: {{ .Values.tls.ca | b64enc | quote }}
+  tls.crt: {{ .Values.tls.crt | b64enc | quote }}
+  tls.key: {{ .Values.tls.key | b64enc | quote }}
+{{- end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ template "patroni.fullname" . }}
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+type: Opaque
+data:
+  password-superuser: {{ .Values.credentials.superuser | b64enc | quote }}
+  password-admin: {{ .Values.credentials.admin | b64enc | quote }}
+  password-standby: {{ .Values.credentials.standby | b64enc | quote }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ template "patroni.fullname" . }}-post-init
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+type: Opaque
+data:
+  post_init.sh: {{ include "patroni.post_init_script" . | b64enc | quote }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ template "patroni.fullname" . }}-db-users
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+type: Opaque
+data:
+  dbs_users: {{ include "patroni.databases" . | b64enc | quote }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgresql-{{ template "patroni.hashedname" $ }}-postgres
+  labels:
+    app: {{ template "patroni.fullname" $ }}
+    chart: {{ template "patroni.chart" $ }}
+    release: {{ template "patroni.hashedname" $ }}
+    heritage: {{ .Release.Service }}
+type: Opaque
+data:
+  username: {{ printf "postgres" | b64enc | quote }}
+  password: {{ .Values.credentials.superuser | b64enc | quote }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgresql-{{ template "patroni.hashedname" $ }}-admin
+  labels:
+    app: {{ template "patroni.fullname" $ }}
+    chart: {{ template "patroni.chart" $ }}
+    release: {{ template "patroni.hashedname" $ }}
+    heritage: {{ .Release.Service }}
+type: Opaque
+data:
+  username: {{ printf "admin" | b64enc | quote }}
+  password: {{ .Values.credentials.admin | b64enc | quote }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgresql-{{ template "patroni.hashedname" $ }}-standby
+  labels:
+    app: {{ template "patroni.fullname" $ }}
+    chart: {{ template "patroni.chart" $ }}
+    release: {{ template "patroni.hashedname" $ }}
+    heritage: {{ .Release.Service }}
+type: Opaque
+data:
+  username: {{ printf "standby" | b64enc | quote }}
+  password: {{ .Values.credentials.standby | b64enc | quote }}
+{{ range $dbConfig := .Values.databases }}
+#---
+#apiVersion: v1
+#kind: Secret
+#metadata:
+#  name: postgresql-{{ template "patroni.hashedname" $ }}-{{ $dbConfig.user | replace "_" "-" }}
+#  labels:
+#    app: {{ template "patroni.fullname" $ }}
+#    chart: {{ template "patroni.chart" $ }}
+#    release: {{ template "patroni.hashedname" $ }}
+#    heritage: {{ $.Release.Service }}
+#type: Opaque
+#data:
+#  username: {{ $dbConfig.user | b64enc | quote }}
+#  password: {{ $dbConfig.pass | b64enc | quote }}
+{{ end }}

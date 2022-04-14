@@ -1,0 +1,443 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "patroni.hashedname" $ }}-pgupgrade
+  labels:
+    app: {{ template "patroni.fullname" $ }}-pgupgrade
+    chart: {{ template "patroni.chart" . }}
+    release: {{ template "patroni.hashedname" $ }}-pgupgrade
+    heritage: {{ .Release.Service }}
+    component: pgupgrade
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  type: ClusterIP
+  ports:
+  - name: postgresql
+    port: 5432
+    targetPort: postgresql
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "patroni.hashedname" $ }}-pgupgrade-config
+  labels:
+    app: {{ template "patroni.fullname" $ }}-pgupgrade
+    chart: {{ template "patroni.chart" . }}
+    release: {{ template "patroni.hashedname" $ }}-pgupgrade
+    heritage: {{ .Release.Service }}
+    component: pgupgrade
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  type: ClusterIP
+  clusterIP: None
+---
+{{- $pgbClientTls := default (dict) (index (default (dict) (index .Values.pgbouncer "tls")) "client") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "patroni.fullname" $ }}-pgupgrade
+  labels:
+    app: {{ template "patroni.fullname" $ }}-pgupgrade
+    chart: {{ template "patroni.chart" . }}
+    release: {{ template "patroni.hashedname" $ }}-pgupgrade
+    heritage: {{ .Release.Service }}
+    component: pgupgrade
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+data:
+  pgbouncer-pause.sh: |
+    #!/bin/sh -x
+    [ -f /a.tar.xz ] && tar -xJf /a.tar.xz -C /
+    set -e
+
+    # wait for the existing production cluster to become available
+    # in case of lifecycle management gone horribly wrong
+    until /usr/bin/pg_isready -h "${CURRENT_CLUSTER}" -U "postgres"; do sleep 3; done
+
+    # pause connections to the PostgreSQL cluster
+    for i in $(curl -sSL --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" https://kubernetes.default.svc/api/v1/namespaces/{{ .Release.Namespace }}/endpoints/{{ template "patroni.fullname" . }} | python3 -c 'import json, sys; [print(i.get("ip")) for i in sum([i.get("addresses", []) for i in json.load(sys.stdin).get("subsets",[])], []) if i.get("ip")]'); do
+      # ref: https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS
+      PGPASSWORD="{{ .Values.pgbouncer.credentials.password }}" psql -w "postgresql://{{ .Values.pgbouncer.credentials.username }}@${i}:5432/pgbouncer?connect_timeout=3&sslmode={{ default "prefer" (index $pgbClientTls "sslmode") }}&sslrootcert=/etc/pg-tls/ca.crt&sslcert=/etc/pg-tls/tls.crt&sslkey=/etc/pg-tls/tls.key" -c 'RECONNECT;' ||:
+      PGPASSWORD="{{ .Values.pgbouncer.credentials.password }}" psql -w "postgresql://{{ .Values.pgbouncer.credentials.username }}@${i}:5432/pgbouncer?connect_timeout=3&sslmode={{ default "prefer" (index $pgbClientTls "sslmode") }}&sslrootcert=/etc/pg-tls/ca.crt&sslcert=/etc/pg-tls/tls.crt&sslkey=/etc/pg-tls/tls.key" -c 'PAUSE;' ||:
+    done
+  pgbasebackup-barrier.sh: |
+    #!/bin/sh -x
+    [ -f /a.tar.xz ] && tar -xJf /a.tar.xz -C /
+
+    TEMP_PG_CLUSTER="{{ template "patroni.hashedname" $ }}-pgupgrade"
+
+    # wait for temp database to come up
+    until /usr/bin/pg_isready -h "${TEMP_PG_CLUSTER}" -U "postgres"; do sleep 3; done
+
+    CHECK_COUNT=5
+    while [ "${CHECK_COUNT}" -gt 0 ]; do
+      # highest sslmode here can be "verify-ca"
+      OLD_PG_CLUSTER_WAL_LSN="$(PGPASSWORD="{{ .Values.credentials.standby }}" psql -wtA "postgresql://standby@${OLD_PG_CLUSTER}:5432/postgres?connect_timeout=3" -c "select pg_catalog.pg_current_wal_lsn();")"
+
+      # check whether old database moved forward
+      [ -n "${OLD_PG_CLUSTER_WAL_LSN_PREV}" ] && [ "${OLD_PG_CLUSTER_WAL_LSN}" != "${OLD_PG_CLUSTER_WAL_LSN_PREV}" ] && echo "Old database moved forward! Failing!" && exit 1
+      OLD_PG_CLUSTER_WAL_LSN_PREV="${OLD_PG_CLUSTER_WAL_LSN}"
+
+      # check whether temp database fell behind old database
+      if [ "$(PGPASSWORD="{{ .Values.credentials.standby }}" psql -wtA "postgresql://standby@${TEMP_PG_CLUSTER}:5432/postgres?connect_timeout=3" -c "select pg_catalog.pg_wal_lsn_diff('${OLD_PG_CLUSTER_WAL_LSN}', pg_catalog.pg_current_wal_lsn());")" -gt 0 ]; then
+        echo "Temporary database fell behind the old one! Failing!"
+        exit 1
+      fi
+
+      sleep 3
+      CHECK_COUNT="$((${CHECK_COUNT}-1))"
+    done
+{{- if .Values.persistentVolume.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ template "patroni.fullname" $ }}-pgupgrade
+  labels:
+    app: {{ template "patroni.fullname" $ }}-pgupgrade
+    chart: {{ template "patroni.chart" . }}
+    release: {{ template "patroni.hashedname" $ }}-pgupgrade
+    heritage: {{ .Release.Service }}
+    component: pgupgrade
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+  {{- if .Values.persistentVolume.annotations }}
+{{ toYaml .Values.persistentVolume.annotations | indent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+{{ toYaml .Values.persistentVolume.accessModes | indent 4 }}
+  resources:
+    requests:
+      storage: "{{ .Values.persistentVolume.size }}"
+  {{- if .Values.persistentVolume.storageClass }}
+    {{- if (eq "-" .Values.persistentVolume.storageClass) }}
+  storageClassName: ""
+    {{- else }}
+  storageClassName: "{{ .Values.persistentVolume.storageClass }}"
+    {{- end }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "patroni.fullname" $ }}-pgupgrade
+  labels:
+    app: {{ template "patroni.fullname" $ }}-pgupgrade
+    chart: {{ template "patroni.chart" . }}
+    release: {{ template "patroni.hashedname" $ }}-pgupgrade
+    heritage: {{ .Release.Service }}
+    component: pgupgrade
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "3"
+    "helm.sh/hook-delete-policy": before-hook-creation
+{{- if .Values.persistentVolume.annotations }}
+{{ toYaml .Values.persistentVolume.annotations | indent 4 }}
+{{- end }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ template "patroni.fullname" $ }}-pgupgrade
+      release: {{ template "patroni.hashedname" $ }}-pgupgrade
+      component: pgupgrade
+  template:
+    metadata:
+      labels:
+        app: {{ template "patroni.fullname" $ }}-pgupgrade
+        release: {{ template "patroni.hashedname" $ }}-pgupgrade
+        component: pgupgrade
+    spec:
+      serviceAccountName: {{ template "patroni.serviceAccountName" . }}
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- if .Values.schedulerName }}
+      schedulerName: {{ .Values.schedulerName }}
+    {{- end }}
+      initContainers:
+      - name: wait-for-prod-cluster
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ['/bin/sh', '-xc', '[ -f /a.tar.xz ] && tar -xJf /a.tar.xz -C /; set -e; until /usr/bin/pg_isready -h "${CURRENT_CLUSTER}" -U "postgres"; do sleep 3; done']
+        env:
+        - name: CURRENT_CLUSTER
+          valueFrom:
+            configMapKeyRef:
+              name: {{ template "patroni.fullname" $ }}
+              key: hashedname
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        env:
+        - name: PGPASSWORD_SUPERUSER
+          valueFrom:
+            secretKeyRef:
+              name: {{ template "patroni.fullname" $ }}
+              key: password-superuser
+        - name: PGPASSWORD_ADMIN
+          valueFrom:
+            secretKeyRef:
+              name: {{ template "patroni.fullname" $ }}
+              key: password-admin
+        - name: PGPASSWORD_STANDBY
+          valueFrom:
+            secretKeyRef:
+              name: {{ template "patroni.fullname" $ }}
+              key: password-standby
+        - name: DCS_ENABLE_KUBERNETES_API
+          value: "true"
+        - name: KUBERNETES_LABELS
+          value: {{ (printf "{ \"app\": \"%s-pgupgrade\", \"release\": \"%s-upgrade\" }" (include "patroni.fullname" $) (include "patroni.hashedname" $)) | quote }}
+        - name: KUBERNETES_SCOPE_LABEL
+          value: "release"
+{{- if .Values.kubernetes.configmaps.enable }}
+        - name: KUBERNETES_USE_CONFIGMAPS
+          value: "true"
+{{- end }}
+        - name: SCOPE
+          value: {{ template "patroni.hashedname" $ }}-pgupgrade
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.podIP
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: PGROOT
+          value: "{{ .Values.persistentVolume.mountPath }}/pgroot"
+        - name: CLONE_METHOD
+          value: CLONE_WITH_BASEBACKUP
+        - name: CLONE_SCOPE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ template "patroni.fullname" $ }}
+              key: hashedname
+        - name: CLONE_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ template "patroni.fullname" $ }}
+              key: hashedname
+        - name: CLONE_USER
+          value: standby
+        - name: CLONE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ template "patroni.fullname" $ }}
+              key: password-standby
+{{- if .Values.env }}
+{{- range $key, $val := .Values.env }}
+        - name: {{ $key | quote | upper }}
+          value: {{ $val | quote }}
+{{- end }}
+{{- end }}
+{{- if .Values.livenessProbe.enabled }}
+        livenessProbe:
+          initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+          exec:
+            command:
+            - "/bin/sh"
+            - "-xec"
+            - "pidof initdb || pidof pg_basebackup || pidof postgres"
+{{- end }}
+        readinessProbe:
+          exec:
+            command: ["/usr/bin/pg_isready", "-U", "postgres"]
+        volumeMounts:
+        - name: pgdata
+          mountPath: "{{ .Values.persistentVolume.mountPath }}"
+      volumes:
+      - name: pgdata
+{{- if .Values.persistentVolume.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ template "patroni.fullname" $ }}-pgupgrade
+{{- else }}
+        emptyDir: {}
+{{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "patroni.fullname" $ }}-pgupgrade-pause
+  labels:
+    app: {{ template "patroni.fullname" $ }}-pgupgrade
+    chart: {{ template "patroni.chart" . }}
+    release: {{ template "patroni.hashedname" $ }}-pgupgrade
+    heritage: {{ .Release.Service }}
+    component: pgupgrade
+    job: pause
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "2"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  completions: 1
+  #ttlSecondsAfterFinished: 0
+  template:
+    metadata:
+      labels:
+        app: {{ template "patroni.fullname" $ }}-pgupgrade-pause
+        release: {{ template "patroni.hashedname" $ }}-pgupgrade-pause
+        component: pgupgrade
+        job: pause
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ template "patroni.serviceAccountName" . }}
+      containers:
+      - name: pauser
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["/bin/sh", "-x", "/mnt/pgbouncer-pause.sh"]
+        env:
+        - name: CURRENT_CLUSTER
+          valueFrom:
+            configMapKeyRef:
+              name: {{ template "patroni.fullname" $ }}
+              key: hashedname
+        volumeMounts:
+        - name: pause-script
+          readOnly: true
+          mountPath: /mnt
+        - name: tls
+          readOnly: true
+          mountPath: /etc/pg-tls
+        resources:
+{{ toYaml .Values.resources | indent 10 }}
+      volumes:
+      - name: pause-script
+        configMap:
+          name: {{ template "patroni.fullname" $ }}-pgupgrade
+          optional: false
+      - name: tls
+        secret:
+          secretName: {{ include "patroni.pgbouncer.tls.clientSecret" . | quote }}
+          defaultMode: 0444
+          optional: true
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- if .Values.schedulerName }}
+      schedulerName: {{ .Values.schedulerName }}
+    {{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "patroni.fullname" $ }}-pgupgrade-barrier
+  labels:
+    app: {{ template "patroni.fullname" $ }}-pgupgrade
+    chart: {{ template "patroni.chart" . }}
+    release: {{ template "patroni.hashedname" $ }}-pgupgrade
+    heritage: {{ .Release.Service }}
+    component: pgupgrade
+    job: barrier
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "4"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  completions: 1
+  #ttlSecondsAfterFinished: 0
+  template:
+    metadata:
+      labels:
+        app: {{ template "patroni.fullname" $ }}-pgupgrade-barrier
+        release: {{ template "patroni.hashedname" $ }}-pgupgrade-barrier
+        component: pgupgrade
+        job: barrier
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ template "patroni.serviceAccountName" . }}
+      containers:
+      - name: barrier
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command: ["/bin/sh", "-x", "/mnt/pgbasebackup-barrier.sh"]
+        env:
+        - name: OLD_PG_CLUSTER
+          valueFrom:
+            configMapKeyRef:
+              name: {{ template "patroni.fullname" $ }}
+              key: hashedname
+        volumeMounts:
+        - name: barrier-script
+          readOnly: true
+          mountPath: /mnt
+        - name: tls
+          mountPath: /etc/pg-tls
+          readOnly: true
+        resources:
+{{ toYaml .Values.resources | indent 10 }}
+      volumes:
+      - name: barrier-script
+        configMap:
+          name: {{ template "patroni.fullname" $ }}-pgupgrade
+          optional: false
+      - name: tls
+        secret:
+          secretName: {{ include "patroni.postgresql.tls.secret" . | quote }}
+          defaultMode: 0444
+          optional: true
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- if .Values.schedulerName }}
+      schedulerName: {{ .Values.schedulerName }}
+    {{- end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ template "patroni.fullname" $ }}-pgupgrade
+  labels:
+    app: {{ template "patroni.fullname" $ }}-pgupgrade
+    chart: {{ template "patroni.chart" . }}
+    release: {{ template "patroni.hashedname" $ }}-pgupgrade
+    heritage: {{ .Release.Service }}
+    component: pgupgrade
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+type: Opaque
+stringData:
+  METHOD: CLONE_WITH_BASEBACKUP
+  SCOPE: {{ template "patroni.hashedname" $ }}-pgupgrade
+  HOST: {{ template "patroni.hashedname" $ }}-pgupgrade
+  USER: standby
+  PASSWORD: {{ .Values.credentials.standby }}

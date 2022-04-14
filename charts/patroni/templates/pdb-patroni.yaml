@@ -1,0 +1,21 @@
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ template "patroni.hashedname" . }}
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ template "patroni.hashedname" . }}
+    heritage: {{ .Release.Service }}
+    component: pgsql
+spec:
+  # state as of k8s commitid 8634bc61c635717dec93128f8908ffd20774e66f:
+  # since rounding logic for *BOTH* `minAvailable` and `maxUnavailable`
+  # rounds possible percentages *UP* to ints (50% of 7 = 4),
+  # while making them mutually exclusive, it's safer to use `minAvailable`
+  minAvailable: {{ .Values.minAvailable }}
+  selector:
+    matchLabels:
+      app: {{ template "patroni.fullname" . }}
+      release: {{ template "patroni.hashedname" $ }}
+      component: pgsql

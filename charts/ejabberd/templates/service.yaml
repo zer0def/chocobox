@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "ejabberd.fullname" . }}
+  labels:
+    app: {{ template "ejabberd.name" . }}
+    chart: {{ template "ejabberd.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+{{- range $k, $v := (omit .Values.service "type" "clusterIP") }}{{- if index $v "enabled" }}
+  - port: {{ index $v "port" }}
+    targetPort: {{ $k }}
+    protocol: TCP
+    name: {{ $k }}
+{{- end }}{{- end }}
+  selector:
+    app: {{ template "ejabberd.name" . }}
+    release: {{ .Release.Name }}

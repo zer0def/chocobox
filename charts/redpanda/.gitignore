@@ -1,0 +1,5 @@
+*.sw?
+*/**/.terraform
+*/**/*.tfstate*
+ansible/playbooks/grafana_dashboards/redpanda-grafana.json
+.idea/

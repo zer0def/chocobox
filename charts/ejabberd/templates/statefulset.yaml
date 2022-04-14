@@ -1,0 +1,142 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ template "ejabberd.fullname" . }}
+  labels:
+    app: {{ template "ejabberd.name" . }}
+    chart: {{ template "ejabberd.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  serviceName: {{ template "ejabberd.fullname" . }}
+  selector:
+    matchLabels:
+      app: {{ template "ejabberd.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "ejabberd.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 6 }}
+    {{- end }}
+    {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+    {{- end }}
+      volumes:
+    {{- with .Values.volumes }}
+{{ toYaml . | indent 6 }}
+    {{- end }}
+      - name: config
+        secret:
+          secretName: {{ template "ejabberd.fullname" . }}
+          #defaultMode: 0400
+          optional: false
+      - name: scripting
+        configMap:
+          name: {{ template "ejabberd.fullname" . }}
+{{- if not .Values.persistence.enabled }}
+      - name: data
+        emptyDir: {}
+{{- end }}
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        lifecycle:
+          postStart:
+            exec:
+              #command: ["/bin/sh", "/cluster.sh"]
+              command: ["/bin/sh", "-c", "exit 0"]
+      {{- with .Values.args }}
+        args:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+        env:
+        - name: K8S_SVC_NAME
+          value: {{ template "ejabberd.fullname" . }}
+        - name: ERLANG_COOKIE
+          valueFrom:
+            secretKeyRef:
+              name: {{ template "ejabberd.fullname" . }}
+              key: .erlang.cookie
+              optional: false
+      {{- with .Values.env }}
+{{ toYaml . | indent 8 }}
+      {{- end }}
+        ports:
+        - name: epmd
+          containerPort: 4369
+          protocol: TCP
+      {{- range $k, $v := (omit .Values.service "type" "clusterIP") }}
+        - name: {{ $k }}
+          containerPort: {{ index $v "port" }}
+          protocol: TCP
+      {{- end }}
+        # TODO
+        # livenessProbe:
+        #   httpGet:
+        #     path: /
+        #     port: http
+        # readinessProbe:
+        #   httpGet:
+        #     path: /
+        #     port: http
+      {{- with .Values.resources }}
+        resources:
+{{ toYaml . | indent 10 }}
+      {{- end }}
+        volumeMounts:
+      {{- with .Values.volumeMounts }}
+{{ toYaml . | indent 8 }}
+      {{- end }}
+        - name: config
+          mountPath: /home/ejabberd/conf/ejabberdctl.cfg
+          readOnly: true
+          subPath: ejabberdctl.cfg
+        - name: config
+          mountPath: /home/ejabberd/conf/ejabberd.yml
+          readOnly: true
+          subPath: ejabberd.yml
+        - mountPath: /cluster.sh
+          name: config
+          readOnly: true
+          subPath: cluster.sh
+        #- name: modules
+        #  mountPath: /home/ejabberd/.ejabberd-modules
+        #  readOnly: true
+        - name: data
+          mountPath: /home/ejabberd/database
+{{- if .Values.persistence.enabled }}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app: {{ template "ejabberd.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      accessModes:
+      - {{ .Values.persistence.accessMode | quote }}
+      resources:
+        requests:
+          storage: {{ .Values.persistence.size | quote }}
+{{- if .Values.persistence.storageClass }}
+{{- if (eq "-" .Values.persistence.storageClass) }}
+      storageClassName: ""
+{{- else }}
+      storageClassName: "{{ .Values.persistence.storageClass }}"
+{{- end }}
+{{- end }}
+{{- end }}

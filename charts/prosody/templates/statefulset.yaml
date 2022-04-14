@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ template "prosody.fullname" . }}
+  labels:
+    app: {{ template "prosody.name" . }}
+    chart: {{ template "prosody.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  serviceName: {{ template "prosody.fullname" . }}
+  selector:
+    matchLabels:
+      app: {{ template "prosody.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "prosody.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      volumes:
+      - name: config
+        secret:
+          secretName: {{ template "prosody.fullname" . }}
+          optional: false
+{{- if not .Values.persistence.enabled }}
+      - name: data
+        emptyDir: {}
+{{- end }}
+      initContainers:
+      - name: fix-perms
+        image: "alpine:edge"
+        command: ["chown", "-R", "{{ .Values.securityContext.runAsUser }}:{{ .Values.securityContext.runAsGroup }}", "/var/lib/prosody"]
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/prosody
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        env:
+{{ toYaml .Values.env | indent 10 }}
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        - name: xmpp-c2s
+          containerPort: 5222
+          protocol: TCP
+        - name: xmpp-s2s
+          containerPort: 5269
+          protocol: TCP
+        - name: xmpp-component
+          containerPort: 5347
+          protocol: TCP
+        - name: bosh-insecure
+          containerPort: 5280
+          protocol: TCP
+        - name: bosh-secure
+          containerPort: 5281
+          protocol: TCP
+        # TODO
+        # livenessProbe:
+        #   httpGet:
+        #     path: /
+        #     port: http
+        # readinessProbe:
+        #   httpGet:
+        #     path: /
+        #     port: http
+        resources:
+{{ toYaml .Values.resources | indent 10 }}
+        volumeMounts:
+        - name: config
+          mountPath: /etc/prosody
+          readOnly: true
+        - name: data
+          mountPath: /var/lib/prosody
+{{- if .Values.persistence.enabled }}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app: {{ template "prosody.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      accessModes:
+      - {{ .Values.persistence.accessMode | quote }}
+      resources:
+        requests:
+          storage: {{ .Values.persistence.size | quote }}
+{{- if .Values.persistence.storageClass }}
+{{- if (eq "-" .Values.persistence.storageClass) }}
+      storageClassName: ""
+{{- else }}
+      storageClassName: "{{ .Values.persistence.storageClass }}"
+{{- end }}
+{{- end }}
+{{- end }}

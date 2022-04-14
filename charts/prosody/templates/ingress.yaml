@@ -1,0 +1,57 @@
+{{- if and .Values.ingress.enabled (or .Values.service.http.enabled .Values.service.bosh.enabled) -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ template "prosody.fullname" . }}
+  labels:
+    app: {{ template "prosody.name" . }}
+    chart: {{ template "prosody.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+{{- with .Values.ingress.annotations }}
+  annotations:
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+{{- if .Values.ingress.tls }}
+  tls:
+  {{- range .Values.ingress.tls }}
+  - hosts:
+    {{- range .hosts }}
+    - {{ . }}
+    {{- end }}
+    secretName: {{ .secretName }}
+  {{- end }}
+{{- end }}
+  rules:
+  {{- range (concat .Values.ingress.hosts (keys .Values.config.vhosts) (keys .Values.config.components)) }}
+  - host: {{ . }}
+    http:
+      paths:
+    {{- if $.Values.service.http.enabled }}
+      - path: {{ $.Values.ingress.path }}
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: {{ template "prosody.fullname" $ }}
+            port:
+              name: http
+    {{- end }}
+    {{- if $.Values.service.bosh.enabled }}
+      - path: /http-bind/
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: "{{ template "prosody.fullname" $ }}-insecure"
+            port:
+              name: bosh-insecure
+      #- path: /http-bind/
+      #  pathType: ImplementationSpecific
+      #  backend:
+      #    service:
+      #      name: {{ template "prosody.fullname" $ }}
+      #      port:
+      #        name: bosh-secure
+    {{- end }}
+  {{- end }}
+{{- end }}

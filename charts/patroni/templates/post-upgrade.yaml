@@ -1,0 +1,176 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ template "patroni.fullname" . }}-pgupgrade-cleanup
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+- apiGroups: [""]
+  resources:
+  - configmaps
+  - endpoints
+  - persistentvolumeclaims
+  - secrets
+  - services
+  verbs:
+  - delete
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs:
+  - delete
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ template "patroni.fullname" . }}-pgupgrade-cleanup
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ template "patroni.fullname" . }}-pgupgrade-cleanup
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "2"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+subjects:
+- kind: ServiceAccount
+  name: {{ template "patroni.fullname" . }}-pgupgrade-cleanup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ template "patroni.fullname" . }}-pgupgrade-cleanup
+---
+{{- $pgbClientTls := default (dict) (index (default (dict) (index .Values.pgbouncer "tls")) "client") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "patroni.fullname" $ }}-pgupgrade-cleanup
+  labels:
+    app: {{ template "patroni.fullname" $ }}-pgupgrade
+    chart: {{ template "patroni.chart" . }}
+    release: {{ template "patroni.hashedname" $ }}-pgupgrade
+    heritage: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+data:
+  cleanup.sh: |
+    #!/bin/sh -x
+
+    [ -f /a.tar.xz ] && tar -xJf /a.tar.xz -C /
+    k8s_delete(){
+      local API_GROUP="${1%%/*}" API_VERSION="${1##*/}" OBJECT_NS="${2}" OBJECT_KIND="${3}" OBJECT_NAME="${4}" API_ENDPOINT NAMESPACE_ENDPOINT=''
+      [ "${API_GROUP}" = "${API_VERSION}" ] && API_ENDPOINT="api" || API_ENDPOINT="apis/${API_GROUP}"
+      [ -n "${OBJECT_NS}" ] && NAMESPACE_ENDPOINT="namespaces/${OBJECT_NS}/"
+      curl -XDELETE -sSL --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" "https://kubernetes.default.svc/${API_ENDPOINT}/${API_VERSION}/${NAMESPACE_ENDPOINT}${OBJECT_KIND}/${OBJECT_NAME}"
+    }
+
+    VERSIONED_NAME="{{ template "patroni.hashedname" $ }}"
+    STATIC_NAME="{{ template "patroni.fullname" $ }}"
+    MY_NAMESPACE="{{ .Release.Namespace }}"
+
+    set -e
+
+    # wait for proper cluster to become ready before cleanup
+    until /usr/bin/pg_isready -h "${VERSIONED_NAME}" -U "postgres"; do sleep 3; done
+
+    # unpause (especially when not doing a version upgrade)
+    for i in $(curl -sSL --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" https://kubernetes.default.svc/api/v1/namespaces/${MY_NAMESPACE}/endpoints/${STATIC_NAME} | python3 -c 'import json, sys; [print(i.get("ip")) for i in sum([i.get("addresses", []) for i in json.load(sys.stdin).get("subsets",[])], []) if i.get("ip")]'); do
+      # ref: https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS
+      PGPASSWORD="{{ .Values.pgbouncer.credentials.password }}" psql -w "postgresql://{{ .Values.pgbouncer.credentials.username }}@${i}:5432/pgbouncer?connect_timeout=3&sslmode={{ default "prefer" (index $pgbClientTls "sslmode") }}&sslrootcert=/etc/pg-tls/ca.crt&sslcert=/etc/pg-tls/tls.crt&sslkey=/etc/pg-tls/tls.key" -c 'RESUME;' ||:
+    done
+
+    set +e
+
+    # services
+    k8s_delete v1 "${MY_NAMESPACE}" services "${VERSIONED_NAME}-pgupgrade"
+    k8s_delete v1 "${MY_NAMESPACE}" endpoints "${VERSIONED_NAME}-pgupgrade"
+    k8s_delete v1 "${MY_NAMESPACE}" services "${VERSIONED_NAME}-pgupgrade-config"
+    k8s_delete v1 "${MY_NAMESPACE}" endpoints "${VERSIONED_NAME}-pgupgrade-config"
+
+    set -e
+    k8s_delete v1 "${MY_NAMESPACE}" configmaps "${STATIC_NAME}-pgupgrade"
+    k8s_delete apps/v1 "${MY_NAMESPACE}" deployments "${STATIC_NAME}-pgupgrade"
+    k8s_delete v1 "${MY_NAMESPACE}" secrets "${STATIC_NAME}-pgupgrade"
+  {{- if .Values.persistentVolume.enabled }}
+    k8s_delete v1 "${MY_NAMESPACE}" persistentvolumeclaims "${STATIC_NAME}-pgupgrade"
+  {{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "patroni.fullname" $ }}-pgupgrade-cleanup
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "3"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  completions: 1
+  template:
+    metadata:
+      labels:
+        app: {{ template "patroni.fullname" $ }}-pgupgrade-cleanup
+        release: {{ template "patroni.hashedname" $ }}-pgupgrade-cleanup
+        component: cleanup
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ template "patroni.fullname" . }}-pgupgrade-cleanup
+      containers:
+      - name: cleanup
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        command: ["/bin/sh", "-x", "/mnt/cleanup.sh"]
+        volumeMounts:
+        - name: cleanup-script
+          readOnly: true
+          mountPath: /mnt
+        - name: tls
+          readOnly: true
+          mountPath: /etc/pg-tls
+      volumes:
+      - name: cleanup-script
+        configMap:
+          name: {{ template "patroni.fullname" $ }}-pgupgrade-cleanup
+          optional: false
+      - name: tls
+        secret:
+          secretName: {{ include "patroni.pgbouncer.tls.clientSecret" . | quote }}
+          defaultMode: 0444
+          optional: true
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- if .Values.schedulerName }}
+      schedulerName: {{ .Values.schedulerName }}
+    {{- end }}

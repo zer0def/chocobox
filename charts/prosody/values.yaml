@@ -1,0 +1,203 @@
+replicaCount: 1
+
+image:
+  repository: prosody/prosody
+  tag: "0.11.9"
+  #tag: "0.11"
+  pullPolicy: IfNotPresent
+
+env: []
+# - name: LOCAL
+#   value: romeo
+# - name: DOMAIN
+#   value: shakespeare.lit
+# - name: PASSWORD
+#   value: juliet4ever
+
+service:
+  type: ClusterIP
+  http:
+    enabled: false
+    port: 80
+  xmpp:
+    c2s:
+      enabled: true
+      port: 5222
+    s2s:
+      enabled: true
+      port: 5269
+    component:
+      enabled: true
+      port: 5347
+  bosh:
+    enabled: false
+    insecure:
+      enabled: false
+      port: 5280
+    secure:
+      enabled: false
+      port: 5281
+
+ingress:
+  enabled: false
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  path: /
+  hosts:
+  - chart-example.local
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+createCerts: false
+
+## Enable persistence using Persistent Volume Claims
+## ref: http://kubernetes.io/docs/user-guide/persistent-volumes/
+##
+persistence:
+  enabled: true
+
+  ## Persistent Volume Storage Class
+  ## If defined, storageClassName: <storageClass>
+  ## If set to "-", storageClassName: "", which disables dynamic provisioning
+  ## If undefined (the default) or set to null, no storageClassName spec is
+  ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
+  ##   GKE, AWS & OpenStack)
+  ##
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 8Gi
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #  cpu: 100m
+  #  memory: 128Mi
+  # requests:
+  #  cpu: 100m
+  #  memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+securityContext:
+  runAsUser: 101
+  runAsGroup: 102
+
+config:
+  log_level: debug
+  allow_registration: false
+  require_encryption:
+    c2s: true
+    s2s: true
+  s2s:
+    secure_auth: true
+    domains:
+      insecure: []
+      secure: []
+  storage:
+    backend: internal
+    sql:
+      driver: PostgreSQL  # choice of: SQLite3, MySQL, PostgreSQL
+      database: prosody.sqlite3
+      #username: prosody
+      #password: prosody
+      #host: 10.13.33.37
+  modules:  # https://modules.prosody.im/ → /usr/lib/prosody/modules
+    enabled:
+    - roster
+    - saslauth
+    - tls
+    - dialback
+    - disco
+    - carbons
+    - pep
+    - private
+    - blocklist
+    - vcard4
+    - vcard_legacy
+    - limits
+    - version
+    - uptime
+    - time
+    - ping
+    - register
+    - mam
+    - csi
+    #- csi_simple
+    - admin_adhoc
+    #- admin_telnet
+    - websocket
+    - http
+    - http_files
+    #- groups
+    #- server_contact_info
+    #- announce
+    #- welcome
+    #- watchregistrations
+    #- motd
+    #- legacyauth
+    - proxy65
+
+    #- otr
+    #- smacks
+    #- cloud_notify
+    #- http_upload
+    disabled: []
+    #- offline
+    #- c2s
+    #- s2s
+    #- posix
+  vhosts:
+    localhost:
+      main_muc: conf.localhost
+  components:
+    conf.localhost:
+      component: muc
+      modules_enabled: ["muc_mam"]
+  extra: |-
+    -- Uncomment to enable statistics
+    -- For more info see https://prosody.im/doc/statistics
+    -- statistics = "internal"
+
+    -- Select the authentication backend to use. The 'internal' providers
+    -- use Prosody's configured data storage to store the authentication data.
+    authentication = "internal_hashed"
+
+    -- Enable rate limits for incoming client and server connections
+    limits = {
+      c2s = {
+        rate = "10kb/s";
+      };
+      s2sin = {
+        rate = "30kb/s";
+      };
+    }
+
+    -- Archiving configuration
+    -- If mod_mam is enabled, Prosody will store a copy of every message. This
+    -- is used to synchronize conversations between multiple clients, even if
+    -- they are offline. This setting controls how long Prosody will keep
+    -- messages in the archive before removing them.
+    archive_expires_after = "1w" -- Remove archived messages after 1 week
+
+    -- Certificates
+    -- Every virtual host and component needs a certificate so that clients and
+    -- servers can securely verify its identity. Prosody will automatically load
+    -- certificates/keys from the directory specified here.
+    -- For more information, including how to use 'prosodyctl' to auto-import certificates
+    -- (from e.g. Let's Encrypt) see https://prosody.im/doc/certificates
+
+    -- Location of directory to find certificates in (relative to main config file):
+    --certificates = "certs"
+
+    -- HTTPS currently only supports a single certificate, specify it here:
+    --https_certificate = "/etc/prosody/certs/localhost.crt"

@@ -1,0 +1,124 @@
+{{- $pgbServerTls := default (dict) (index (default (dict) (index .Values.pgbouncer "tls")) "server") }}
+{{- $pgbClientTls := default (dict) (index (default (dict) (index .Values.pgbouncer "tls")) "client") }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "patroni.fullname" . }}
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+    component: pgbouncer
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ template "patroni.fullname" . }}
+    release: {{ .Release.Name }}-pgbouncer
+  ports:
+  - name: postgresql
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "patroni.fullname" . }}-pgbouncer
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}-pgbouncer
+    heritage: {{ .Release.Service }}
+    component: pgbouncer
+spec:
+  replicas: {{ .Values.pgbouncer.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ template "patroni.fullname" $ }}
+      release: {{ .Release.Name }}-pgbouncer
+      component: pgbouncer
+  template:
+    metadata:
+      labels:
+        app: {{ template "patroni.fullname" . }}
+        release: {{ .Release.Name }}-pgbouncer
+        component: pgbouncer
+    spec:
+      serviceAccountName: {{ template "patroni.serviceAccountName" . }}
+      initContainers:
+      - name: cert-perm-fix
+        image: "alpine:edge"
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: server-tls
+          mountPath: /etc/tls/pgb-server
+          readOnly: true
+        - name: client-tls
+          mountPath: /etc/tls/pgb-client
+          readOnly: true
+        - name: tls
+          mountPath: /etc/pgb
+        command:
+        - "/bin/sh"
+        - "-xc"
+        - |
+          mkdir -p /etc/pgb/server /etc/pgb/client
+          cp /etc/tls/pgb-server/* /etc/pgb/server/
+          cp /etc/tls/pgb-client/* /etc/pgb/client/
+          find /etc/pgb -type f -iname "*.crt" -print0 | xargs -0 -I'{}' -- /bin/sh -c 'chmod 0444 {}; chown 70 {}'
+          find /etc/pgb -type f -iname "*.key" -print0 | xargs -0 -I'{}' -- /bin/sh -c 'chmod 0400 {}; chown 70 {}'
+          exit 0
+      containers:
+      - name: pgbouncer
+        image: "{{ .Values.pgbouncer.image.repository }}:{{ .Values.pgbouncer.image.tag }}"
+        imagePullPolicy: {{ .Values.pgbouncer.image.pullPolicy }}
+        ports:
+        - containerPort: 5432
+        readinessProbe:
+          exec:
+            command:
+            - "/bin/sh"
+            - "-xec"
+            - |
+              /usr/bin/pg_isready -h {{ template "patroni.hashedname" . }} -p 5432 -U {{ .Values.pgbouncer.credentials.username }} -d postgres
+              /usr/bin/pg_isready -h 127.0.0.1 -p 5432 -U {{ .Values.pgbouncer.credentials.username }} -d postgres
+        volumeMounts:
+        - name: pgbouncer-config
+          mountPath: /etc/pgbouncer
+          readOnly: true
+        - name: tls
+          mountPath: /etc/pgb-tls
+          readOnly: true
+        resources:
+{{ toYaml .Values.resources | indent 10 }}
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- if .Values.schedulerName }}
+      schedulerName: {{ .Values.schedulerName }}
+    {{- end }}
+      volumes:
+      - name: pgbouncer-config
+        secret:
+          secretName: {{ template "patroni.fullname" . }}-pgbouncer
+          defaultMode: 0555
+          optional: false
+      - name: server-tls
+        secret:
+          secretName: {{ include "patroni.pgbouncer.tls.serverSecret" . | quote }}
+          defaultMode: 0444
+          optional: {{ not (or (and (.Capabilities.APIVersions.Has "cert-manager.io/v1") (index (default (dict) (index $pgbServerTls "issuerRef")) "name")) (and (not (index (default (dict) (index $pgbServerTls "issuerRef")) "name")) (index $pgbServerTls "ca") (index $pgbServerTls "crt") (index $pgbServerTls "key")) (index $pgbServerTls "secretName")) }}
+      - name: client-tls
+        secret:
+          secretName: {{ include "patroni.pgbouncer.tls.clientSecret" . | quote }}
+          defaultMode: 0444
+          optional: {{ not (or (and (.Capabilities.APIVersions.Has "cert-manager.io/v1") (index (default (dict) (index $pgbClientTls "issuerRef")) "name")) (and (not (index (default (dict) (index $pgbClientTls "issuerRef")) "name")) (index $pgbClientTls "ca") (index $pgbClientTls "crt") (index $pgbClientTls "key")) (index $pgbClientTls "secretName")) }}
+      - name: tls
+        emptyDir: {}

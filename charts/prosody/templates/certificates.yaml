@@ -1,0 +1,18 @@
+{{- if and (.Capabilities.APIVersions.Has "cert-manager.io/v1") .Values.createCerts }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ template "prosody.fullname" . }}
+  labels:
+    app: {{ template "prosody.name" . }}
+    chart: {{ template "prosody.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  secretName: {{ template "prosody.fullname" . }}-tls
+  commonName: ???
+  dnsNames: {{ toYaml (concat .Values.ingress.hosts (keys .Values.config.vhosts) (keys .Values.config.components)) | nindent 4 }}
+  issuerRef:
+    name: ???
+    kind: ClusterIssuer?
+{{- end }}

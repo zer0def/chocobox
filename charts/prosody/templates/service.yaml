@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "prosody.fullname" . }}
+  labels:
+    app: {{ template "prosody.name" . }}
+    chart: {{ template "prosody.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+{{- if .Values.service.xmpp.c2s.enabled }}
+  - port: {{ .Values.service.xmpp.c2s.port }}
+    targetPort: xmpp-c2s
+    protocol: TCP
+    name: xmpp-c2s
+{{- end }}
+{{- if .Values.service.xmpp.component.enabled }}
+  - port: {{ .Values.service.xmpp.component.port }}
+    targetPort: xmpp-component
+    protocol: TCP
+    name: xmpp-component
+{{- end }}
+{{- if .Values.service.xmpp.s2s.enabled }}
+  - port: {{ .Values.service.xmpp.s2s.port }}
+    targetPort: xmpp-s2s
+    protocol: TCP
+    name: xmpp-s2s
+{{- end }}
+{{- if .Values.service.http.enabled }}
+  - port: {{ .Values.service.http.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+{{- end }}
+{{- if and .Values.service.bosh.enabled .Values.service.bosh.insecure.enabled }}
+  - port: {{ .Values.service.bosh.insecure.port }}
+    targetPort: bosh-insecure
+    protocol: TCP
+    name: bosh-insecure
+{{- end }}
+{{- if and .Values.service.bosh.enabled .Values.service.bosh.secure.enabled }}
+  - port: {{ .Values.service.bosh.secure.port }}
+    targetPort: bosh-secure
+    protocol: TCP
+    name: bosh-secure
+{{- end }}
+  selector:
+    app: {{ template "prosody.name" . }}
+    release: {{ .Release.Name }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "prosody.fullname" . }}-insecure
+  labels:
+    app: {{ template "prosody.name" . }}
+    chart: {{ template "prosody.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ .Values.service.bosh.insecure.port }}
+    targetPort: bosh-insecure
+    protocol: TCP
+    name: bosh-insecure
+  selector:
+    app: {{ template "prosody.name" . }}
+    release: {{ .Release.Name }}

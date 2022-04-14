@@ -1,0 +1,143 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ template "patroni.fullname" . }}-endpoint-cleanup
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+- apiGroups: [""]
+  resources:
+  - endpoints
+  - services
+  verbs: ["delete"]
+- apiGroups: ["apps"]
+  resources: ["statefulsets"]
+  verbs: ["get"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ template "patroni.fullname" . }}-endpoint-cleanup
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ template "patroni.fullname" . }}-endpoint-cleanup
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "2"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+subjects:
+- kind: ServiceAccount
+  name: {{ template "patroni.fullname" . }}-endpoint-cleanup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ template "patroni.fullname" . }}-endpoint-cleanup
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "patroni.fullname" $ }}-endpoint-cleanup
+  labels:
+    app: {{ template "patroni.fullname" $ }}-endpoint
+    chart: {{ template "patroni.chart" . }}
+    release: {{ template "patroni.fullname" $ }}-endpoint
+    heritage: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+data:
+  cleanup.sh: |
+    #!/bin/sh -x
+
+    [ -f /a.tar.xz ] && tar -xJf /a.tar.xz -C /
+    k8s_delete(){
+      local API_GROUP="${1%%/*}" API_VERSION="${1##*/}" OBJECT_NS="${2}" OBJECT_KIND="${3}" OBJECT_NAME="${4}" API_ENDPOINT NAMESPACE_ENDPOINT=''
+      [ "${API_GROUP}" = "${API_VERSION}" ] && API_ENDPOINT="api" || API_ENDPOINT="apis/${API_GROUP}"
+      [ -n "${OBJECT_NS}" ] && NAMESPACE_ENDPOINT="namespaces/${OBJECT_NS}/"
+      curl -XDELETE -sSL --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" "https://kubernetes.default.svc/${API_ENDPOINT}/${API_VERSION}/${NAMESPACE_ENDPOINT}${OBJECT_KIND}/${OBJECT_NAME}"
+    }
+
+    MY_NAMESPACE="{{ .Release.Namespace }}"
+    VERSIONED_NAME="{{ template "patroni.hashedname" $ }}"
+
+    # if upcoming release has running StatefulSet pods for
+    # the same Patroni version as we're about to deploy, do nothing
+    curl -sSL --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" https://kubernetes.default.svc/apis/apps/v1/namespaces/${MY_NAMESPACE}/statefulsets/${VERSIONED_NAME} | python3 -c 'import json, sys; sys.exit(not (json.load(sys.stdin).get("status", {}).get("readyReplicas", 0) > 0))' && exit 0
+
+    k8s_delete v1 "${MY_NAMESPACE}" services "${VERSIONED_NAME}-config"
+    k8s_delete v1 "${MY_NAMESPACE}" endpoints "${VERSIONED_NAME}-config"
+    k8s_delete v1 "${MY_NAMESPACE}" endpoints "${VERSIONED_NAME}-failover"
+    k8s_delete v1 "${MY_NAMESPACE}" endpoints "${VERSIONED_NAME}-sync"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "patroni.fullname" $ }}-endpoint-cleanup
+  labels:
+    app: {{ template "patroni.fullname" . }}
+    chart: {{ template "patroni.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "3"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  completions: 0
+  template:
+    metadata:
+      labels:
+        app: {{ template "patroni.fullname" $ }}-endpoint-cleanup
+        release: {{ template "patroni.fullname" $ }}-endpoint-cleanup
+        component: cleanup
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ template "patroni.fullname" . }}-endpoint-cleanup
+      containers:
+      - name: cleanup
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        command: ["/bin/sh", "/mnt/cleanup.sh"]
+        volumeMounts:
+        - name: cleanup-script
+          readOnly: true
+          mountPath: /mnt
+      volumes:
+      - name: cleanup-script
+        configMap:
+          name: {{ template "patroni.fullname" $ }}-endpoint-cleanup
+          optional: false
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- if .Values.schedulerName }}
+      schedulerName: {{ .Values.schedulerName }}
+    {{- end }}

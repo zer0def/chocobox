@@ -4,3 +4,36 @@
 [submodule "android-debloater"]
 	path = android-preload/MinDebloater
 	url = https://github.com/FriendlyNeighborhoodShane/MinDebloater
+[submodule "oci-images/spilo"]
+	path = oci-images/spilo
+	url = https://github.com/zer0def/spilo
+[submodule "oci-images/openstack-helm-images"]
+	path = oci-images/openstack-helm-images
+	url = https://github.com/zer0def/openstack-helm-images
+[submodule "oci-images/loci"]
+	path = oci-images/loci
+	url = https://github.com/zer0def/loci
+[submodule "oci-images/swift"]
+	path = oci-images/swift
+	url = https://github.com/zer0def/docker-swift
+[submodule "charts/openstack-helm-infra"]
+	path = charts/openstack-helm-infra
+	url = https://github.com/zer0def/openstack-helm-infra
+[submodule "charts/openstack-helm"]
+	path = charts/openstack-helm
+	url = https://github.com/zer0def/openstack-helm
+[submodule "charts/cortex-chart"]
+	path = charts/cortex-chart
+	url = https://github.com/zer0def/cortex-chart
+[submodule "charts/sentry-charts"]
+	path = charts/sentry-charts
+	url = https://github.com/zer0def/sentry-charts
+[submodule "charts/scylla-operator"]
+	path = charts/scylla-operator
+	url = https://github.com/zer0def/scylla-operator
+[submodule "charts/seaweedfs"]
+	path = charts/seaweedfs
+	url = https://github.com/zer0def/seaweedfs
+[submodule "charts/zulip"]
+	path = charts/zulip
+	url = https://github.com/zer0def/oci-zulip
