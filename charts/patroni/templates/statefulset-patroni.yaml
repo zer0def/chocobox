@@ -66,9 +66,12 @@ spec:
         - "-xc"
         - |
           cp /etc/tls/source/* /etc/tls/destination/
-          find /etc/tls/destination -type f -iname "*.crt" -print0 | xargs -0 -I'{}' -- /bin/sh -c 'chmod 0444 {}; chown 101 {}'
-          find /etc/tls/destination -type f -iname "*.key" -print0 | xargs -0 -I'{}' -- /bin/sh -c 'chmod 0400 {}; chown 101 {}'
+          find /etc/tls/destination -type f -iname "*.crt" -print0 | xargs -0 -I'{}' -- /bin/sh -c 'chmod 0444 {}; chown 999 {}'
+          find /etc/tls/destination -type f -iname "*.key" -print0 | xargs -0 -I'{}' -- /bin/sh -c 'chmod 0400 {}; chown 999 {}'
           exit 0
+    {{- if .Values.extraInitContainers }}
+      {{- toYaml .Values.extraInitContainers | nindent 6 }}
+    {{- end }}
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -337,6 +340,9 @@ spec:
         resources:
 {{ toYaml .resources | indent 10 }}
       {{- end }}
+    {{- end }}
+    {{- if .Values.extraContainers }}
+      {{- toYaml .Values.extraContainers | nindent 6 }}
     {{- end }}
     {{- with .Values.nodeSelector }}
       nodeSelector:
